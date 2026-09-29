@@ -1,0 +1,618 @@
+// dufs-gui 主界面 —— 只做三件事:窗口外壳、分页头、把状态转发给三个分页
+//
+// ── 结构(2026-09 重组)───────────────────────────────────────────────
+//   ui/theme.slint          设计 token + 跨页复用的开关规则
+//   ui/components/          可复用的小控件(分组 / 带标签的行 / 说明文字 / 拖拽横幅)
+//   ui/pages/share.slint        ① 共享        —— 把文件交出去要配的东西（路径/端口/权限/账号）
+//   ui/pages/advanced.slint     ② 进阶        —— 少数人才动
+//   ui/pages/application.slint  ③ 应用        —— 本软件自己的设置
+//
+// 分页的判定标准是「**归属 + 影响面**」,不是"常用/不常用":
+//   归属:  改的是 dufs 服务,还是这个程序自己?
+//   影响面:是"谁能连上/能干什么",还是"服务怎么呈现"?
+//   老结构的问题正是把这两条混着用:本软件的设置被劈成两半。
+//   现在「应用」一页收拢了本软件自己的设置(窗口置顶因为要配合拖拽,
+//   特意留在共享页)。
+//
+// ★ 2026-09 之后又合并过一次:原「访问与权限」分页被拆开 ——
+//   权限与账号进「共享」,跨域与隐藏进「进阶」,于是只剩三个分页。
+//
+// ── 改代码时必须知道的四条 ─────────────────────────────────────────
+// 1. ★ 这里**绝不能**给 Window 写 width / height(定值或绑定都不行):
+//    Slint 用 window_is_resizable(min, max) 判定能否缩放,min == max 时
+//    会 set_resizable(false),于是最大化按钮变灰、边框拖不动。
+//    窗口尺寸由 Rust 侧 service::fit_window() 调一次 set_size 来适配。
+// 2. ★ 本文件里的属性名 / 回调名**必须与 Rust 侧一致**
+//    (main.rs / service.rs 用 ui.set_xxx / ui.on_xxx 读写)。
+//    分页里用的是同名属性,靠下面 `<=>` 双向绑定接过来 —— 改名字时要两边一起改。
+// 3. ★ 分页组件不能拉伸:每个分页根布局都写了 vertical-stretch: 0,
+//    多余高度统一由内容区末尾那个空 Rectangle 吸收(见文件末尾的说明)。
+// 4. ★ 组件里不要写 `width: parent.width - N` 这种"宽度依赖父、父又依赖子"的绑定:
+//    它会让 preferred width 的计算变成循环,布局算出来的宽度可能为负。
+//    要撑满就用布局的 stretch,要固定宽度就给明确值。
+//
+// 回调转发写法:`name(参数) => { root.name(参数); }`
+//   ★ 参数名是**在这里**给的(子组件里的声明只有类型没有名字)。
+
+import { Button, GroupBox, LineEdit, ComboBox, ScrollView } from "std-widgets.slint";
+import { Theme, Rules } from "theme.slint";
+import { DropBanner } from "components/drop-banner.slint";
+import { Hint, HintKind } from "components/hint.slint";
+import { LabeledRow } from "components/labeled-row.slint";
+import { CloseConfirmCard } from "components/close-confirm-card.slint";
+import { SharePage, AccountEntry } from "pages/share.slint";
+import { AdvancedPage } from "pages/advanced.slint";
+import { ApplicationPage } from "pages/application.slint";
+
+// ★ 两行都要写（见 ui/types.slint 里的说明）：import 供本文件使用，
+//   export-from 才让枚举进 Rust 的公开 API。
+import { Tab } from "types.slint";
+import { TipMark } from "components/tip.slint";
+export { Tab } from "types.slint";
+// ★ 把内置的 Palette 全局转出，Rust 侧才能 `ui.global::<Palette>()`
+//   往它写 `color-scheme`（明暗主题）。见 `service::apply_theme`。
+export { Palette } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    // ★ 窗口标题由 Rust 注入（`src/main.rs::main_window_title()`）。
+    //   这里给个中文默认值，保证单独预览 `app.slint` 时也有标题。
+    //
+    //   ⚠ 标题**不参与找窗口** —— 找窗口走 `src/window_finder.rs` 的 PID 枚举。
+    //   所以以后把标题翻成英文，不会影响对话框 parent / 标题栏图标 /
+    //   文件拖放 / 窗口置顶 / 托盘抢前台这五处。（以前是靠标题字符串
+    //   `FindWindowW` 找的，两边必须保持一字不差，非常脆。）
+    in-out property <string> window-title: @tr("dufs 文件共享");
+    title: root.window-title;
+    // ★ 窗口/任务栏图标：Rust 启动时用 src/icon.rs 的绘制数据填 app-icon。
+    //
+    //   ⚠ 光靠这个属性**不够**：Slint 1.18 的 winit 后端对 `Image::from_rgba8`
+    //   这种没有 cache key 的图，一次都不会调 WM_SETICON（标题栏就是空白）。
+    //   真正生效的是 src/window_icon.rs（show() 之后自己设 ICON_SMALL），
+    //   那里开头有完整推导 + WM_GETICON 实测数据。
+    //   这里保留是因为它无害（同一份绘制数据），将来 Slint 修了也能自动生效。
+    in-out property <image> app-icon;
+    icon: app-icon;
+    // ★ 窗口底色显式绑到主题 token：不写就靠模板默认（FluentPalette.background），
+    //   虽然默认值也是随明暗变的，但显式写才能保证「窗框和控件同一套天色」。
+    background: Theme.window-bg;
+    min-width: 620px;
+    min-height: 420px;
+
+    // ================= 分页 =================
+    // ★ 枚举而不是 0/1/2（见 ui/types.slint 开头的说明）。
+    in-out property <Tab> tab: Tab.share;
+
+    // ================= 共享(①)=================
+    in-out property <string> serve-path: "";
+    in-out property <bool>   path-valid: true;   // Rust 侧异步校验
+    // 选的是单个文件时为 true。单文件模式下 dufs 的上传/删除是「假成功」
+    // (返回 200 但什么都不做),「共享」页据此把权限类选项置灰。
+    in-out property <bool>   path-is-file: false;
+    in-out property <string> path-real-hint: "";  // 「→ 实际共享 …」，不需要时为空串
+    // 有文件正悬停在窗口上(原生拖放,Rust 侧写)。界面据此显示绿色横幅。
+    // ★ 只管显示,不管接收 —— 真正的接收在 Rust 侧的 IDropTarget 里。
+    in-out property <bool>   drag-over: false;
+    in-out property <string> port-text: "5000";
+    in-out property <bool>   all-nics-checked: true;   // 「所有网卡」勾没勾
+    in-out property <[string]> bind-left: [];           // 平铺左栏
+    in-out property <[string]> bind-right: [];          // 平铺右栏
+    in-out property <string> bind-summary: "";          // 折叠时的「已绑定：…」      // 第 0 项是"所有网卡"
+    in-out property <[bool]> bind-checked: [];   // 与 bind-list 等长
+
+    // ===== 共享页（权限 / 账号）+ 进阶页（跨域 / 隐藏 / URL 前缀）：按分页归属分组 =====
+    in-out property <bool>   allow-upload: true;
+    in-out property <bool>   allow-search: true;
+    in-out property <bool>   allow-delete: false;
+    in-out property <bool>   allow-archive: false;
+    in-out property <int>    compress-index: 1;
+    // ★ 上面这个 int 只是那个 ComboBox 的**行号**，不参与任何判断：
+    //   语义在 `config::Compress`，换算在 `Compress::to_index/from_index`。
+    //   所以这里不再需要「0none 1low…」这种解释（那种注释本身就是魔术数字的痕迹）。
+    //   为什么不换成 Slint 枚举：见 ui/types.slint 开头。
+    in-out property <bool>   allow-hash: false;
+    in-out property <bool>   allow-symlink: false;
+    in-out property <bool>   enable-cors: false;
+    in-out property <bool>   allow-all: false;
+    in-out property <bool>   readonly-mode: false;
+    in-out property <string> hidden: "";           // --hidden
+
+    in-out property <bool>   use-auth: false;
+    // 账号列表（可视化多账号编辑器）。注意是单向的：
+    // 用户输入走下面的回调进 Rust，Rust 只在"增/删/加载"时重建整个 model
+    // （每敲一个字都重建会把光标弄丢）。详见 service.rs。
+    in-out property <[AccountEntry]> accounts: [];
+    in-out property <[string]> recent-paths: [];
+    in-out property <int> recent-index: -1;
+    in-out property <string> path-prefix: "";
+
+    // ================= 进阶(②)=================
+    in-out property <int>    render-mode-index: 0;
+    // ★ 同上：只是 ComboBox 的行号，语义在 `config::RenderMode`。
+    in-out property <string> tls-cert: "";
+    in-out property <string> tls-key: "";
+    in-out property <string> log-file: "";
+    in-out property <string> log-format: "";
+    in-out property <bool>   log-disabled: false;   // 关闭 http 访问日志
+    in-out property <string> assets: "";         // --assets
+    in-out property <string> dufs-config: "";     // -c
+    in-out property <string> extra-args: "";
+
+    // ================= 应用(③)=================
+    // 关窗默认动作：0 = 直接退出程序，1 = 隐藏到托盘
+    in-out property <int>    close-action-index: 0;
+    in-out property <bool>   confirm-on-close: true;
+    in-out property <bool>   autostart: false;
+    in-out property <bool>   autostart-serve: false;
+    in-out property <bool>   start-in-tray: false;
+    // 界面语言。0 = 跟随系统，1 = 简体中文，2 = English（顺序同 config::Language）。
+    // ★ 这里只有**行号**，换算全在 Rust（和 perm/compress/render-mode 一样的约定），
+    //   因为 ComboBox 内部会给 current-index 赋值，而给带单向绑定的属性赋值
+    //   会打断绑定（实测，见实施计划 Step 2 的记录）。
+    in-out property <int>    language-index: 0;
+    // 界面明暗主题。0 = 跟随系统，1 = 浅色，2 = 深色（顺序同 config::ThemeMode）。
+    in-out property <int>    theme-index: 0;
+    // 窗口置顶(WS_EX_TOPMOST)。运行时也能拨,改完立即生效并存盘。
+    in-out property <bool>   stay-on-top: false;
+    // 本程序自己的详细日志(和「进阶 → 访问日志」是两回事)。
+    in-out property <bool>   verbose-log: true;
+    // ---- 关窗确认（应用内弹层，不是原生 TaskDialog）----
+    // ★ 状态放 MainWindow 而不是弹层里：PopupWindow 内部元素不能被外部访问
+    //   （Slint #4438），Rust 只能读写外面这几个属性。
+    in-out property <bool>   close-confirm-visible: false;
+    in-out property <bool>   close-confirm-never-ask: false;
+    /// 弹层里哪个按钮是默认（primary）：true = 隐藏到托盘，false = 直接退出
+    in-out property <bool>   close-confirm-default-tray: false;
+    // 防火墙规则状态(后台 netsh 枚举后写回)
+    in-out property <string> fw-rules-text: @tr("正在检查防火墙规则…");
+    // ---- 关于 / 诊断(只读,启动时由 Rust 填一次) ----
+    in-out property <string> app-version: "";
+    in-out property <string> dufs-version: "";
+    in-out property <string> config-path: "";
+    in-out property <string> log-path: "";
+    in-out property <string> bin-dir: "";
+
+    // ================= 运行状态 =================
+    in-out property <bool>   running: false;
+    in-out property <bool>   busy: false;
+    in-out property <string> status-text: @tr("未启动");
+    in-out property <string> url-text: "";
+    in-out property <string> ip-warning: "";
+    // 「访问地址」下拉框:只决定手机访问区显示/二维码用哪个地址,
+    // 不影响服务监听(那是共享页的 bind-index)。所以运行中照样可用。
+    in-out property <[string]> addr-list: [];
+    in-out property <int>    addr-index: 0;
+    in-out property <image>  qr-image;
+    in-out property <string> hint-text: "";
+    in-out property <bool>   hint-is-error: false;
+
+    // ================= 回调(Rust 侧实现)=================
+    callback pick-share-folder();     // 「选择文件夹…」
+    callback pick-share-file();       // 「选择文件…」
+    callback stay-on-top-changed(bool); // 置顶复选框拨动(立即生效 + 存盘)
+    callback language-changed(int);    // 界面语言下拉(立即生效 + 存盘，不用重启)
+    callback theme-changed(int);       // 明暗主题下拉(立即生效 + 存盘)
+    callback close-action-changed(int); // 关窗动作下拉(存盘)
+    callback close-confirm-respond(int); // 关窗确认弹层：0=取消 1=直接退出 2=隐藏到托盘
+    callback confirm-on-close-changed(bool); // 「关闭窗口前先询问」复选框(存盘)
+    callback autostart-changed(bool, bool, bool);  // 开机自启 / 启动后自动共享 / 静默进托盘
+    callback verbose-log-changed(bool); // 详细日志开关
+    callback open-log();                // 「应用 → 打开本程序日志」
+    callback open-access-log();         // 「进阶 → 访问日志 → 查看」（那是 dufs 的日志）
+    callback open-log-folder();         // 打开本程序日志所在文件夹
+    callback clear-log();               // 清空本程序日志
+    callback open-config();             // 打开配置文件
+    callback restore-defaults(bool);    // 恢复默认(true=本程序默认, false=dufs 原生纯只读)
+    callback start-stop();
+    callback add-firewall();
+    callback copy-url();
+    callback open-browser();
+    callback open-share-location();
+    /// 复制带用户名密码的访问链接（仅开启账号访问时可用）
+    callback copy-auth-url();
+    callback path-edited(string);
+    callback expand-bind();
+    callback bind-all-toggled(bool);
+    callback bind-toggled(int, bool);
+    // 账号列表编辑：(行, 列, 值)，列 0=用户名 1=密码 2=路径
+    callback account-edited(int, int, string);
+    // 账号权限下拉：(行, 权限下拉框行号 0=读写 1=只读)
+    // ★ 第二个参数是**行号**不是文案 —— 换算在 `Perm::from_index`（见 ui/types.slint 开头）
+    callback account-perm-changed(int, int);
+    callback account-removed(int);
+    callback account-added();
+    callback refresh-nics();         // 重新枚举网卡
+    callback recent-path-picked(string);  // 「最近」下拉选了一条路径
+    callback addr-changed(string);   // 运行中切换访问地址(仅显示)
+    callback refresh-rules();        // 重新枚举防火墙规则
+    callback cleanup-rules();        // 清掉所有 dufs-gui 放行规则(会弹 UAC)
+    callback purge-data();           // 清除程序数据 / 卸载
+    callback pick-tls-file(string);  // "cert" | "key"
+    callback pick-config();          // -c 配置文件
+    callback pick-assets();          // --assets 目录
+
+    VerticalLayout {
+        padding: Theme.pad;
+        spacing: Theme.gap;
+
+        // ---------- 标题栏 ----------
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: @tr("dufs 文件共享");
+                font-size: Theme.font-title;
+                font-weight: 700;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            VerticalLayout {
+                alignment: center;
+                // 运行状态点。★ 圆角写成 直径/2 而不是 5px —— 让这两个值不可能不同步
+                //   （README §6.6b 记过一次「常量不同步导致控件被裁」的教训）
+                Rectangle {
+                    width: Theme.status-dot;
+                    height: Theme.status-dot;
+                    border-radius: Theme.status-dot / 2;
+                    background: root.running ? Theme.accent-strong : Theme.idle;
+                }
+            }
+            Text {
+                text: root.running ? @tr("运行中") : @tr("已停止");
+                color: root.running ? Theme.accent : Theme.text-secondary;
+                vertical-alignment: center;
+            }
+        }
+
+        // ---------- 分页头 ----------
+        // ★ 用 4 个 Button 自己画(primary 表示选中)而不是 TabWidget:
+        //   Fluent 样式只导出了 TabWidget 没导出 Tab,标准 TabWidget 用不了。
+        // ★ 曾试过「左侧竖排导航」,又退回按钮:
+        //   左栏要吃 150px,窗口 620 宽时内容区只剩 410px,「监听网卡」那一行
+        //   会挤得很难看;四个按钮的方案在同一宽度下更从容。
+        //   (当时还一度以为侧栏导致 resize 崩溃,后来查明是**测试脚本**自己的问题:
+        //    PowerShell 变量名大小写不敏感,`$script:w`(窗口句柄)把 `$W`(宽度参数)
+        //    覆盖成了句柄值,窗口被设成 300 万像素宽才越过 i16 上限 —— 与界面无关。
+        //    教训记在 README §6.9。)
+        HorizontalLayout {
+            spacing: 6px;
+            Button {
+                text: @tr("共享");
+                primary: root.tab == Tab.share;
+                horizontal-stretch: 1;
+                clicked => { root.tab = Tab.share; }
+            }
+            Button {
+                text: @tr("进阶");
+                primary: root.tab == Tab.advanced;
+                horizontal-stretch: 1;
+                clicked => { root.tab = Tab.advanced; }
+            }
+            Button {
+                text: @tr("应用");
+                primary: root.tab == Tab.application;
+                horizontal-stretch: 1;
+                clicked => { root.tab = Tab.application; }
+            }
+        }
+
+        // ---------- 拖放高亮 ----------
+        // 原生拖放进行中时显示。放在分页头下方通栏,不管当前在哪个分页都看得到。
+        if root.drag-over : DropBanner { }
+
+        // ---------- 分页内容 ----------
+        // preferred-height 显式给一个有限值:否则 ScrollView 会把内容高度
+        // 当成首选高度,把窗口顶得很高。stretch 让它在窗口变大时跟着长。
+        ScrollView {
+            preferred-height: 330px;
+            min-height: 180px;
+            vertical-stretch: 1;
+
+            VerticalLayout {
+                spacing: Theme.gap;
+
+                if root.tab == Tab.share : SharePage {
+                    serve-path          <=> root.serve-path;
+                    path-valid          :   root.path-valid;
+                    path-is-file        :   root.path-is-file;
+                    path-real-hint      :   root.path-real-hint;
+                    port-text           <=> root.port-text;
+                    all-nics-checked    :   root.all-nics-checked;
+                    bind-left           :   root.bind-left;
+                    bind-right          :   root.bind-right;
+                    bind-checked        :   root.bind-checked;
+                    bind-summary        :   root.bind-summary;
+                    running             :   root.running;
+                    busy                :   root.busy;
+                    // 逐项权限 + 两个总开关（同属共享页的「允许的操作」）
+                    allow-all           <=> root.allow-all;
+                    readonly-mode       <=> root.readonly-mode;
+                    allow-upload        <=> root.allow-upload;
+                    allow-delete        <=> root.allow-delete;
+                    allow-search        <=> root.allow-search;
+                    allow-archive       <=> root.allow-archive;
+                    compress-index      <=> root.compress-index;
+                    allow-hash          <=> root.allow-hash;
+                    allow-symlink       <=> root.allow-symlink;
+                    pick-share-folder   => { root.pick-share-folder(); }
+                    pick-share-file     => { root.pick-share-file(); }
+                    path-edited         (t)  => { root.path-edited(t); }
+                    expand-bind         => { root.expand-bind(); }
+                    bind-all-toggled    (v)  => { root.bind-all-toggled(v); }
+                    bind-toggled        (i, v) => { root.bind-toggled(i, v); }
+                    refresh-nics        => { root.refresh-nics(); }
+                    recent-paths        :   root.recent-paths;
+                    recent-index        <=> root.recent-index;
+                    recent-path-picked (p)   => { root.recent-path-picked(p); }
+                    use-auth            <=> root.use-auth;
+                    accounts              :   root.accounts;
+                    account-edited      (i, f, v) => { root.account-edited(i, f, v); }
+                    account-perm-changed(i, v) => { root.account-perm-changed(i, v); }
+                    account-removed     (i)  => { root.account-removed(i); }
+                    account-added       ()   => { root.account-added(); }
+                }
+
+                if root.tab == Tab.advanced : AdvancedPage {
+                    enable-cors         <=> root.enable-cors;
+                    hidden              <=> root.hidden;
+                    render-mode-index <=> root.render-mode-index;
+                    path-prefix       <=> root.path-prefix;
+                    tls-cert          <=> root.tls-cert;
+                    tls-key           <=> root.tls-key;
+                    log-file          <=> root.log-file;
+                    log-format        <=> root.log-format;
+                    log-disabled      <=> root.log-disabled;
+                    dufs-config       <=> root.dufs-config;
+                    assets            <=> root.assets;
+                    extra-args        <=> root.extra-args;
+                    path-is-file      :   root.path-is-file;
+                    running           :   root.running;
+                    busy              :   root.busy;
+                    pick-tls-file (kind) => { root.pick-tls-file(kind); }
+                    pick-config          => { root.pick-config(); }
+                    pick-assets          => { root.pick-assets(); }
+                    open-access-log      => { root.open-access-log(); }
+                }
+
+                if root.tab == Tab.application : ApplicationPage {
+                    close-action-index <=> root.close-action-index;
+                    language-index     <=> root.language-index;
+                    theme-index        <=> root.theme-index;
+                    confirm-on-close   <=> root.confirm-on-close;
+                    autostart          <=> root.autostart;
+                    autostart-serve    <=> root.autostart-serve;
+                    start-in-tray      <=> root.start-in-tray;
+                    use-auth           :   root.use-auth;
+                    stay-on-top        <=> root.stay-on-top;
+                    verbose-log        <=> root.verbose-log;
+                    fw-rules-text      :   root.fw-rules-text;
+                    app-version        :   root.app-version;
+                    dufs-version       :   root.dufs-version;
+                    config-path        :   root.config-path;
+                    log-path           :   root.log-path;
+                    bin-dir            :   root.bin-dir;
+                    refresh-rules      => { root.refresh-rules(); }
+                    cleanup-rules      => { root.cleanup-rules(); }
+                    purge-data         => { root.purge-data(); }
+                    stay-on-top-changed (on)  => { root.stay-on-top-changed(on); }
+                    language-changed (i)      => { root.language-changed(i); }
+                    theme-changed (i)         => { root.theme-changed(i); }
+                    close-action-changed (i)  => { root.close-action-changed(i); }
+                    confirm-on-close-changed (on) => { root.confirm-on-close-changed(on); }
+                    autostart-changed (on, serve, tray) => { root.autostart-changed(on, serve, tray); }
+                    verbose-log-changed (on)  => { root.verbose-log-changed(on); }
+                    open-log                  => { root.open-log(); }
+                    open-log-folder           => { root.open-log-folder(); }
+                    clear-log                 => { root.clear-log(); }
+                    open-config               => { root.open-config(); }
+                    restore-defaults    (app) => { root.restore-defaults(app); }
+                }
+
+                // ★ 吸高占位符:必须放在所有分页内容的最后。
+                //   Slint 的布局会把「多余的高度」分给子元素,如果这里没有占位,
+                //   窗口被拉高时多出来的空间会被平摊到每一行上 ——
+                //   表现就是「共享路径」「端口」这些输入框被拉得又高又丑。
+                //   这里放一个只吃高度的空 Rectangle,多余空间全部被它吸收,
+                //   于是所有控件始终保持自己的首选(固定)高度。
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+
+        // ---------- 固定区与滚动区的分界 ----------
+        // 下面那个「手机访问」（二维码）也是**不参与滚动**的，所以分隔线
+        // 画在整个固定区的**最上方**——即内容区下边、二维码之前。
+        // （不运行的时候没有二维码，这条线就直接落在按钮/提示上面。）
+        Rectangle {
+            height: 1px;
+            background: Theme.divider;
+        }
+
+        // ---------- 运行中:地址 + 二维码 ----------
+        // 二维码放左边、信息放右边,比上下堆叠省大约 100px 高度
+        //
+        // ★ `vertical-stretch: 0` 必须写：Slint Fluent 的 `GroupBox` 根元素就是
+        //   它那个 VerticalLayout，内部还包了一个 `Rectangle { vertical-stretch: 1 }`
+        //   —— 也就是**默认会抢高度**。不写这行，窗口拉高时多余空间会被它和
+        //   上面的 ScrollView 瓜分，二维码块跟着变高，内部就空出一大片。
+        //   写死 0 之后，多出来的高度全部归上面滚动的分页内容。
+        if root.running : GroupBox {
+            title: @tr("手机访问");
+            vertical-stretch: 0;
+            HorizontalLayout {
+                padding: 8px;
+                spacing: 12px;
+                vertical-stretch: 0;
+
+                Image {
+                    source: root.qr-image;
+                    width: Theme.qr-size;
+                    height: Theme.qr-size;
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+                    vertical-stretch: 0;
+
+                    // ★ 这一栏是「仅显示」的地址切换,运行中也能用。
+                    //   它跟共享页的「监听网卡」是两回事:
+                    //   那个决定 dufs 绑哪张网卡(要停服务才能改),
+                    //   这个只决定二维码/复制的地址。
+                    LabeledRow {
+                        label: @tr("访问地址");
+                        label-width: Theme.label-w-address;
+                        // 只有一项可选时那个下拉框是灰的，这句解释它为什么灰
+                        tip: @tr("当前仅监听此地址。如需改用其它地址，请先停止服务，再在「共享」页修改「监听网卡」。");
+                        ComboBox {
+                            model: root.addr-list;
+                            current-index <=> root.addr-index;
+                            selected(v) => { root.addr-changed(v); }
+                            // 只有一项可选时置灰(比如绑定了单张网卡)
+                            enabled: root.addr-list.length > 1;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+                    LineEdit {
+                        text: root.url-text;
+                        read-only: true;
+                        font-size: 15px;
+                        horizontal-alignment: center;
+                    }
+
+                    // 原来这里是一行居中灰字，现在只留一个居中的「?」
+                    HorizontalLayout {
+                        alignment: center;
+                        TipMark { tip: @tr("使用手机相机或微信扫描二维码即可打开"); }
+                    }
+
+                    if root.ip-warning != "" : Hint {
+                        kind: HintKind.warn;
+                        text: root.ip-warning;
+                    }
+
+                    Rectangle { vertical-stretch: 1; }
+                }
+            }
+        }
+
+        // ---------- 操作按钮 ----------
+        // ★ 放在内容区外面:放里面的话窗口一矮就被滚出可视区,
+        //   用户就找不到「放行防火墙」了
+        if root.running : HorizontalLayout {
+            spacing: Theme.gap;
+            alignment: center;
+            Button { text: @tr("复制地址");   clicked => { root.copy-url(); } }
+            Button { text: @tr("浏览器打开"); clicked => { root.open-browser(); } }
+            Button { text: @tr("放行防火墙"); clicked => { root.add-firewall(); } }
+            Button { text: @tr("打开共享位置"); clicked => { root.open-share-location(); } }
+            if root.use-auth : Button {
+                text: @tr("复制密码链接");
+                clicked => { root.copy-auth-url(); }
+            }
+        }
+
+        // ---------- 提示 ----------
+        if root.hint-text != "" : Hint {
+            kind: root.hint-is-error ? HintKind.error : HintKind.info;
+            text: root.hint-text;
+        }
+
+        // ---------- 底部:状态 + 启停 ----------
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: root.status-text;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                wrap: word-wrap;
+                color: Theme.text-muted;
+            }
+            Button {
+                text: root.running ? @tr("停止服务") : (root.busy ? @tr("处理中…") : @tr("启动服务"));
+                primary: !root.running;
+                // 端口校验用 Rules.port-ok:同一份规则,和共享页里的报错完全一致
+                enabled: (!root.busy)
+                    && (root.running
+                        || (Rules.port-ok(root.port-text) && root.path-valid && root.serve-path != ""));
+                clicked => { root.start-stop(); }
+            }
+        }
+    }
+
+    // ================= 关窗确认弹层 =================
+    //
+    // ★ 为什么不用 Windows 原生 TaskDialog：它会在 `on_close_requested` 回调里
+    //   再起一个**嵌套模态消息循环** —— 等于在 winit 的事件循环里重入消息泵，
+    //   并且 `EnableWindow(主窗口, FALSE)`。实测后果：点「关闭」时整个前台输入
+    //   被卡住（连终端/桌面一起僵）。改用 Slint 自己的 PopupWindow：
+    //   全程在同一个事件循环里，不重入、不禁用主窗口。
+    //
+    // ★ 显示/隐藏只由 `close-confirm-visible` 驱动（见下面 changed），
+    //   不用 `if … : PopupWindow`（它要靠 show()/close() 才生效）。
+    close-confirm := PopupWindow {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        // 点遮罩不自动关 —— 由下面的 TouchArea/按钮显式走「取消」分支
+        close-policy: no-auto-close;
+        // ★ 键盘：PopupWindow 自带 forward-focus，把键转给内部 FocusScope。
+        //   Slint 自己的 ComboBox 弹层就是这么接的（fluent/combobox.slint）。
+        forward-focus: close-confirm-focus;
+
+        // Esc = 取消，Enter = 默认动作（和原来的原生框一致）。
+        close-confirm-focus := FocusScope {
+            width: 100%;
+            height: 100%;
+            key-pressed(event) => {
+                if (event.text == Key.Escape) {
+                    root.close-confirm-respond(0);
+                    return accept;
+                } else if (event.text == Key.Return) {
+                    root.close-confirm-respond(root.close-confirm-default-tray ? 2 : 1);
+                    return accept;
+                }
+                return reject;
+            }
+
+            // 半透明遮罩：铺满 + 吞掉点击（点空白处当「取消」）
+            Rectangle {
+                width: 100%;
+                height: 100%;
+                background: #00000066;
+                TouchArea {
+                    clicked => { root.close-confirm-respond(0); }
+                }
+            }
+
+            // 居中的卡片
+            Rectangle {
+                width: 400px;
+                // 高度跟内容走；宽度是定值 400px，所以不会出现「宽依赖高、高又依赖宽」的回环
+                height: card-body.preferred-height;
+                x: (root.width - self.width) / 2;
+                y: (root.height - self.height) / 2;
+                background: Theme.window-bg;
+                border-radius: Theme.radius;
+                border-width: 1px;
+                border-color: Theme.divider;
+
+                // 吸收卡片空白处的点击，免得穿透到遮罩变成「取消」
+                TouchArea { width: 100%; height: 100%; }
+
+                // 卡片内容抽在 components/close-confirm-card.slint
+                card-body := CloseConfirmCard {
+                    never-ask <=> root.close-confirm-never-ask;
+                    default-tray: root.close-confirm-default-tray;
+                    respond(choice) => { root.close-confirm-respond(choice); }
+                }
+            }
+        }
+    }
+
+    changed close-confirm-visible => {
+        if root.close-confirm-visible {
+            close-confirm.show();
+        } else {
+            close-confirm.close();
+        }
+    }
+}

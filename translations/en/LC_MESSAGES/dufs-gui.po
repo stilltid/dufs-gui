@@ -1,0 +1,476 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: dufs-gui\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "dufs 文件共享"
+msgstr "dufs file sharing"
+
+msgid "正在检查防火墙规则…"
+msgstr "Checking firewall rules…"
+
+msgid "未启动"
+msgstr "Not started"
+
+msgid "运行中"
+msgstr "Running"
+
+msgid "已停止"
+msgstr "Stopped"
+
+msgid "共享"
+msgstr "Share"
+
+msgid "进阶"
+msgstr "Advanced"
+
+msgid "应用"
+msgstr "Application"
+
+msgid "手机访问"
+msgstr "Phone access"
+
+msgid "访问地址"
+msgstr "Access address"
+
+msgid "当前仅监听此地址。如需改用其它地址，请先停止服务，再在「共享」页修改「监听网卡」。"
+msgstr "This is the only address being listened on right now. To use another one, stop the service first and then change \"Listen on\" on the Share page."
+
+msgid "使用手机相机或微信扫描二维码即可打开"
+msgstr "Scan the QR code with your phone camera or WeChat to open it"
+
+msgid "复制地址"
+msgstr "Copy address"
+
+msgid "浏览器打开"
+msgstr "Open in browser"
+
+msgid "放行防火墙"
+msgstr "Allow through firewall"
+
+msgid "打开共享位置"
+msgstr "Open shared location"
+
+msgid "复制密码链接"
+msgstr "Copy password link"
+
+msgid "停止服务"
+msgstr "Stop service"
+
+msgid "处理中…"
+msgstr "Working…"
+
+msgid "启动服务"
+msgstr "Start service"
+
+msgid "松开鼠标即可共享拖入的文件或文件夹（一次仅支持一个）"
+msgstr "Release the mouse to share the dropped file or folder (one at a time)"
+
+msgid "跨域访问"
+msgstr "Cross-origin access"
+
+msgid "允许跨域访问（CORS）"
+msgstr "Allow cross-origin access (CORS)"
+
+msgid "目录列表里隐藏"
+msgstr "Hide from the directory listing"
+
+msgid "例如：tmp,*.log,*.lock,.git,node_modules"
+msgstr "e.g. tmp,*.log,*.lock,.git,node_modules"
+
+msgid "以逗号分隔（支持全角逗号，多余空格会自动忽略）；通配符遵循 glob 语法：* ? [0-9]。\n仅与文件名匹配：填写 sub/a.log 这类含路径的写法不会生效。区分大小写。\n命中的文件不出现在目录列表中，但已知文件名时仍可直接访问。"
+msgstr "Separate with commas (full-width commas work too; extra spaces are ignored); wildcards follow glob syntax: * ? [0-9].\nFile names only are matched: path-like entries such as sub/a.log have no effect. Case-sensitive.\nMatching files are left out of the directory listing, but can still be opened directly when the name is known."
+
+msgid "当前共享的是单个文件，访问者仅能浏览与下载该文件。「目录列表里隐藏」对单文件无意义，已置灰且不会传给 dufs。"
+msgstr "A single file is being shared, so visitors can only view and download that file. \"Hide from the directory listing\" means nothing for a single file, so it is greyed out and not passed to dufs."
+
+msgid "静态网站模式"
+msgstr "Static website mode"
+
+msgid "不启用（仅列出目录）"
+msgstr "Off (list the directory only)"
+
+msgid "存在 index.html 时渲染，否则返回 404"
+msgstr "Render when index.html exists, otherwise return 404"
+
+msgid "存在 index.html 时渲染，否则列出目录"
+msgstr "Render when index.html exists, otherwise list the directory"
+
+msgid "SPA（未知路径均返回 index.html）"
+msgstr "SPA (unknown paths return index.html)"
+
+msgid "单文件模式下没有目录可渲染，该选项不会传给 dufs。"
+msgstr "There is no directory to render in single-file mode, so this option is not passed to dufs."
+
+msgid "共享路径内存在前端构建产物时使用。\n注意：SPA 模式下仅一层未知路径（如 /dashboard）会回退到 index.html，更深的路径（如 /a/b）由 dufs 返回 404。"
+msgstr "Use this when the shared path contains a frontend build.\nNote: in SPA mode only one level of unknown path (such as /dashboard) falls back to index.html; deeper paths (such as /a/b) get a 404 from dufs."
+
+msgid "HTTPS（可选）"
+msgstr "HTTPS (optional)"
+
+msgid "证书"
+msgstr "Certificate"
+
+msgid "选择…"
+msgstr "Choose…"
+
+msgid "私钥"
+msgstr "Private key"
+
+msgid "两项均需填写。使用自签名证书时，手机浏览器会提示证书警告，首次访问需手动选择「继续前往」。\n启用后二维码中的地址自动变为 https://。"
+msgstr "Both fields are required. With a self-signed certificate the phone's browser shows a certificate warning, and you have to pick \"Proceed\" by hand on the first visit.\nOnce enabled, the address in the QR code automatically becomes https://."
+
+msgid "URL 前缀（可选）"
+msgstr "URL prefix (optional)"
+
+msgid "例如 myfiles"
+msgstr "e.g. myfiles"
+
+msgid "填写后访问地址变为 http://<ip>:<端口>/<前缀>（启用 HTTPS 时为 https://…）。二维码与「复制地址」会同步变化。\n该选项不属于访问控制：获得带前缀链接的任何人均可访问，仅起隐藏路径的作用。"
+msgstr "Once filled in, the access address becomes http://<ip>:<port>/<prefix> (https://… when HTTPS is on). The QR code and \"Copy address\" follow along.\nThis is not access control: anyone who gets the prefixed link can still get in; it only hides the path."
+
+msgid "访问日志"
+msgstr "Access log"
+
+msgid "日志文件"
+msgstr "Log file"
+
+msgid "留空则不记录到文件"
+msgstr "Leave empty to not write to a file"
+
+msgid "查看"
+msgstr "View"
+
+msgid "日志格式"
+msgstr "Log format"
+
+msgid "留空用 dufs 默认格式"
+msgstr "Leave empty for dufs's default format"
+
+msgid "关闭访问日志（不记录任何请求）"
+msgstr "Turn the access log off (record no requests)"
+
+msgid "可查看访问时间与被访问的文件。修改后需重启服务生效。"
+msgstr "Shows access times and which files were accessed. Restart the service for changes to take effect."
+
+msgid "外部文件：配置文件与前端资源"
+msgstr "External files: config file and frontend assets"
+
+msgid "配置文件"
+msgstr "Config file"
+
+msgid "留空则不用（只支持 .json / .yaml）"
+msgstr "Leave empty to skip (only .json / .yaml are supported)"
+
+msgid "dufs 自身的配置文件（-c），可一次性写入全部选项。实测 dufs 0.46 仅支持 .json / .yaml（.toml 会报错）。\n其它页面中填写的选项会覆盖配置文件中的同名项。"
+msgstr "dufs's own config file (-c), which can set every option at once. Measured against dufs 0.46: only .json / .yaml are supported (.toml errors out).\nOptions filled in on the other pages override entries with the same name from this file."
+
+msgid "前端资源"
+msgstr "Frontend assets"
+
+msgid "留空则用 dufs 内置界面"
+msgstr "Leave empty to use dufs's built-in UI"
+
+msgid "用于替换网页版界面（--assets）。该目录必须包含 index.html，否则 dufs 启动失败。\n目录中放置 404.html 可自定义未找到页面时的显示内容。"
+msgstr "Replaces the web UI (--assets). The folder must contain index.html, otherwise dufs fails to start.\nPutting a 404.html in the folder customises what is shown when a page is not found."
+
+msgid "额外命令行参数"
+msgstr "Extra command-line arguments"
+
+msgid "例如 --allow-archive --compress high"
+msgstr "e.g. --allow-archive --compress high"
+
+msgid "为尚未纳入界面的 dufs 选项保留，参数会拼接在最前面。使用 -h 可查看 dufs 支持的全部选项。\n注意：按空格切分，参数内含空格会出错；与界面已有选项重复时会被拦截并提示。"
+msgstr "Kept for dufs options the UI does not cover yet; the arguments are prepended. Run -h to see every option dufs supports.\nNote: arguments are split on spaces, so an argument containing a space breaks; anything duplicating an option already in the UI is blocked with a message."
+
+msgid "窗口"
+msgstr "Window"
+
+msgid "窗口置顶"
+msgstr "Always on top"
+
+msgid "始终位于其它窗口之上，不会被资源管理器遮挡，便于拖放文件。"
+msgstr "Stays above other windows and is not covered by File Explorer, which makes dropping files onto it easy."
+
+msgid "关闭窗口时"
+msgstr "On window close"
+
+msgid "直接退出程序"
+msgstr "Exit the program"
+
+msgid "隐藏到托盘"
+msgstr "Hide to tray"
+
+msgid "直接退出：先停止服务，再退出程序。\n隐藏到托盘：窗口隐藏到右下角托盘，服务继续运行（手机仍可访问）；完全退出请使用托盘右键菜单中的「退出」。"
+msgstr "Exit: stop the service, then quit the program.\nHide to tray: the window goes to the tray in the bottom-right corner and the service keeps running (your phone can still connect); to quit completely, use \"Exit\" in the tray's right-click menu."
+
+msgid "关闭窗口前先询问"
+msgstr "Ask before closing the window"
+
+msgid "勾选（默认）：关闭窗口时先弹出确认框，可在框中勾选「不再询问」。\n不勾选：关闭窗口直接执行上方所选动作。"
+msgstr "Ticked (default): a confirmation appears when the window is closed, with a \"Don't ask again\" box.\nUnticked: closing the window does whatever is selected above, straight away."
+
+msgid "是否关闭窗口？"
+msgstr "Close the window?"
+
+msgid "请选择关闭方式："
+msgstr "Choose how to close:"
+
+msgid "取消"
+msgstr "Cancel"
+
+msgid "以后不再询问，直接按本次选择执行"
+msgstr "Don't ask again — always do what I chose this time"
+
+msgid "开机与自动共享"
+msgstr "Startup and automatic sharing"
+
+msgid "登录 Windows 后自动运行本程序"
+msgstr "Run this program automatically after logging in to Windows"
+
+msgid "启动后自动开始共享"
+msgstr "Start sharing automatically on launch"
+
+msgid "静默启动（直接进托盘，不弹窗口）"
+msgstr "Start silently (straight to the tray, no window)"
+
+msgid "前两项均勾选：登录后自动启动服务并开始共享。\n仅勾选第二项：手动打开程序时也自动开始共享。\n第三项仅作用于「登录后自动运行」：勾选后登录时静默进入托盘，不显示窗口（手动双击 exe 始终显示窗口）。\n自启项记录的是当前 exe 的路径，程序移动位置后需重新勾选。"
+msgstr "Both of the first two ticked: the service starts and sharing begins at logon.\nOnly the second ticked: sharing also starts automatically when you open the program by hand.\nThe third applies only to \"Run automatically after logging in\": when ticked, logon goes silently to the tray with no window (double-clicking the exe always shows the window).\nThe autostart entry records the path of the current exe, so tick it again after moving the program."
+
+msgid "未启用账号认证。自动开始共享后，同一局域网内的任何设备均可访问（可在「共享」页设置账号密码）。"
+msgstr "Account authentication is not enabled. Once automatic sharing starts, any device on the same LAN can get in (you can set a user name and password on the Share page)."
+
+msgid "本程序日志（用于排障）"
+msgstr "Program log (for troubleshooting)"
+
+msgid "详细日志"
+msgstr "Verbose log"
+
+msgid "记录本程序自身的动作：生成的完整 dufs 命令行、等待就绪、网卡变化、拖放注册、配置读写等。\n关闭后仅记录关键事件（启动 / 失败），日志长度显著减少。每次启动程序都会清空。"
+msgstr "Records what this program itself does: the full dufs command line it builds, waiting for readiness, interface changes, drag-and-drop registration, config reads and writes, and so on.\nWhen off, only key events (startup / failure) are recorded and the log gets much shorter. The log is cleared on every launch."
+
+msgid "打开日志"
+msgstr "Open log"
+
+msgid "打开所在文件夹"
+msgstr "Open containing folder"
+
+msgid "清空日志"
+msgstr "Clear log"
+
+msgid "恢复默认设置"
+msgstr "Restore defaults"
+
+msgid "两套默认值不同：\n· 本程序出厂默认：允许上传与允许搜索（便于手机向电脑传输文件）\n· dufs 原生默认：全部权限关闭，即纯只读（最安全）\n两套均会将端口恢复为 5000、监听网卡恢复为「所有网卡」；共享路径不会被清除。"
+msgstr "The two sets of defaults differ:\n· This program's factory defaults: uploads and search allowed (handy for sending files from your phone to the PC)\n· dufs native defaults: every permission off, i.e. strictly read-only (safest)\nBoth sets put the port back to 5000 and the listening interface back to \"All interfaces\"; the shared path is not cleared."
+
+msgid "恢复本程序默认…"
+msgstr "Restore this program's defaults…"
+
+msgid "按 dufs 原生默认（纯只读）…"
+msgstr "dufs native defaults (read-only)…"
+
+msgid "Windows 防火墙"
+msgstr "Windows Firewall"
+
+msgid "Windows 防火墙中为 dufs 添加的放行规则："
+msgstr "Rules added to Windows Firewall for dufs:"
+
+msgid "刷新"
+msgstr "Refresh"
+
+msgid "清理放行规则…"
+msgstr "Clean up rules…"
+
+msgid "放行按端口添加规则（规则名形如 dufs-gui-5000）。更换端口后会残留多条旧规则，可在此一并清理。清理需要管理员权限，会弹出一次 UAC。"
+msgstr "Allowing adds one rule per port (named like dufs-gui-5000). Changing the port leaves old rules behind, and they can all be cleaned up here. Cleanup needs administrator permission and raises one UAC prompt."
+
+msgid "清除程序数据"
+msgstr "Erase program data"
+
+msgid "清除程序数据 / 卸载…"
+msgstr "Erase program data / uninstall…"
+
+msgid "将删除释放出的 dufs 与界面设置（位于 %LOCALAPPDATA% 与 %APPDATA%，约 4.8 MB）。\n不会删除共享文件夹；dufs-gui.exe 需自行删除。执行前会先确认一次。"
+msgstr "Deletes the extracted dufs and the UI settings (in %LOCALAPPDATA% and %APPDATA%, about 4.8 MB).\nShared folders are not deleted; dufs-gui.exe has to be deleted by hand. You will be asked to confirm once first."
+
+msgid "关于"
+msgstr "About"
+
+msgid "本程序"
+msgstr "This program"
+
+msgid "dufs 目录"
+msgstr "dufs folder"
+
+msgid "打开配置文件"
+msgstr "Open config file"
+
+msgid "配置为明文 JSON。界面显示异常时可打开核对（修改后需重启程序）。"
+msgstr "The config is plain-text JSON. Open it to check things when the UI looks wrong (restart the program after editing)."
+
+msgid "共享的文件夹 / 文件"
+msgstr "Shared folder / file"
+
+msgid "填写文件夹或文件的完整路径，也可将文件拖入窗口"
+msgstr "Enter the full path of a folder or file, or drop a file onto the window"
+
+msgid "选择文件夹…"
+msgstr "Choose folder…"
+
+msgid "选择文件…"
+msgstr "Choose file…"
+
+msgid "最近使用"
+msgstr "Recent"
+
+msgid "→ 实际共享：{}"
+msgstr "→ Actually shared: {}"
+
+msgid "单个文件模式：访问地址直接指向该文件，仅可查看与下载。"
+msgstr "Single-file mode: the access address points straight at that file, so it can only be viewed and downloaded."
+
+msgid "路径不存在，或既不是文件夹也不是文件"
+msgstr "The path does not exist, or it is neither a folder nor a file"
+
+msgid "服务"
+msgstr "Service"
+
+msgid "端口"
+msgstr "Port"
+
+msgid "端口取值范围为 1 ~ 65535"
+msgstr "The port must be between 1 and 65535"
+
+msgid "监听网卡"
+msgstr "Listen on"
+
+msgid "所有网卡（推荐）"
+msgstr "All interfaces (recommended)"
+
+msgid "收起"
+msgstr "Collapse"
+
+msgid "指定具体网卡…"
+msgstr "Specific interface…"
+
+msgid "重新检测网卡"
+msgstr "Detect interfaces again"
+
+msgid "「所有网卡」表示监听全部网络接口（含 IPv6），手机通过任意网络均可连接；仅勾选具体网卡时只监听所选地址，安全性更高。\n地址列表按局域网连通性排序，虚拟网卡（VPN / WSL）排在末尾。"
+msgstr "\"All interfaces\" means listening on every network interface (IPv6 included), so your phone can connect over any network; ticking only specific interfaces listens on just those addresses, which is safer.\nThe list is ordered by LAN reachability, with virtual adapters (VPN / WSL) at the end."
+
+msgid "允许的操作"
+msgstr "Allowed operations"
+
+msgid "单文件模式下本组选项不适用，已置灰且不会传给 dufs。"
+msgstr "In single-file mode this group does not apply; it is greyed out and not passed to dufs."
+
+msgid "放开全部操作（--allow-all）"
+msgstr "Allow all operations (--allow-all)"
+
+msgid "只读模式"
+msgstr "Read-only mode"
+
+msgid "将同时开启以下 6 项：上传、删除、搜索、打包下载、?hash 校验、跟随外部符号链接。"
+msgstr "This turns on all 6 of the following: uploads, deletion, search, archive downloads, ?hash checksums and following external symlinks."
+
+msgid "允许上传"
+msgstr "Allow uploads"
+
+msgid "允许删除"
+msgstr "Allow deletion"
+
+msgid "允许搜索"
+msgstr "Allow search"
+
+msgid "允许把文件夹打包下载"
+msgstr "Allow downloading folders as archives"
+
+msgid "打包压缩级别"
+msgstr "Archive compression"
+
+msgid "不压缩"
+msgstr "None"
+
+msgid "低"
+msgstr "Low"
+
+msgid "中"
+msgstr "Medium"
+
+msgid "高"
+msgstr "High"
+
+msgid "允许 ?hash 查询文件 SHA256"
+msgstr "Allow ?hash to look up a file's SHA256"
+
+msgid "允许跟随指向外部的符号链接"
+msgstr "Allow following symlinks that point outside"
+
+msgid "开启后，共享路径内的符号链接可指向共享路径之外的任意位置。"
+msgstr "When on, symlinks inside the shared path may point anywhere outside it."
+
+msgid "账号"
+msgstr "Accounts"
+
+msgid "启用账号访问"
+msgstr "Enable account access"
+
+msgid "用户名"
+msgstr "User name"
+
+msgid "密码"
+msgstr "Password"
+
+msgid "/路径"
+msgstr "/path"
+
+msgid "读写"
+msgstr "Read-write"
+
+msgid "只读"
+msgstr "Read-only"
+
+msgid "+ 添加账号"
+msgstr "+ Add account"
+
+msgid "用户名留空表示匿名访问（不校验密码）；同一用户名可写多行，表示该账号的多个路径。\n密码以明文保存在配置文件和 dufs 命令行中，本机其它程序可读取。\n$6$ 开头的哈希可直接填写（dufs 按哈希校验）；其它 $...$ 格式会被当作明文密码，等同于未使用哈希。"
+msgstr "An empty user name means anonymous access (no password check); the same user name on several rows means several paths for that account.\nPasswords are stored in plain text in the config file and in the dufs command line, so other programs on this machine can read them.\nA hash starting with $6$ can be entered directly (dufs checks it as a hash); any other $...$ form is treated as a plain-text password, i.e. as if no hash were used."
+
+msgid "界面语言"
+msgstr "Interface language"
+
+msgid "语言"
+msgstr "Language"
+
+msgid "跟随系统"
+msgstr "Follow system"
+
+msgid "简体中文"
+msgstr "简体中文"
+
+msgid "English"
+msgstr "English"
+
+msgid "切换后立即生效，不需要重启程序。"
+msgstr "Takes effect immediately; no restart needed."
+
+msgid "外观"
+msgstr "Appearance"
+
+msgid "主题"
+msgstr "Theme"
+
+msgid "浅色"
+msgstr "Light"
+
+msgid "深色"
+msgstr "Dark"
+
+msgid "「跟随系统」会随 Windows 的浅色/深色设置自动变化。切换后立即生效，不需要重启程序。"
+msgstr "\"Follow system\" tracks the Windows light/dark setting. Changes apply immediately; no restart needed."

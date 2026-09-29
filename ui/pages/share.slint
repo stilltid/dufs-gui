@@ -1,0 +1,492 @@
+// 分页① 共享
+//
+// 这一页的判定标准是「**把文件交出去要配的东西**」:
+//   共享路径（文件夹或单个文件）、端口、监听网卡 —— 就这三样是必需的。
+//   外加「允许的操作」（最常拨的开关）和「账号」（谁能进来）——
+//   两者回答的是同一个访问控制问题（"进来能干嘛" + "谁能进"），
+//   拆在两页会让用户为了配一次共享来回切页。
+//
+// 其余选项（跨域、隐藏、静态网站等低频项）在「进阶」页。
+
+// 账号列表里的一行。对应 Rust 侧 `config::AccountRow`。
+// 由 service.rs 负责同步（输入走回调进 Rust，Rust 只在增/删/加载时重建整个 model ——
+// 每敲一个字都重建会把光标弄丢）。
+export struct AccountEntry {
+    name: string,
+    secret: string,
+    path: string,
+    // ★ 这是那个 ComboBox 的**行号**（0 = 读写，1 = 只读），不是语义。
+    //   语义在 `config::Perm`，只在 `Perm::to_index/from_index` 一处换算 ——
+    //   顺序必须与下面那个 `model: ["读写", "只读"]` 一致。
+    //   为什么不换成 Slint 枚举：见 ui/types.slint 开头。
+    perm-index: int,
+}
+
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+import { Theme, Rules } from "../theme.slint";
+import { Section } from "../components/section.slint";
+import { Hint, HintKind } from "../components/hint.slint";
+import { LabeledRow } from "../components/labeled-row.slint";
+import { TipMark } from "../components/tip.slint";
+
+export component SharePage inherits VerticalLayout {
+    // ---- 下面是根窗口的属性/回调,名字必须与 ui/app.slint 一致 ----
+    // （app.slint 里用 `<=>` / `:` / `=>` 对过来,所以本页可以直接读写它们）
+    in-out property <string> serve-path: "";
+    in property <bool> path-valid: true;
+    in property <bool> path-is-file: false;
+    in property <string> path-real-hint: "";
+    in-out property <string> port-text: "5000";
+    // ---- 监听网卡（多选）----
+    // 「所有网卡」单独一个勾，不和具体网卡混在一个数组里
+    in property <bool> all-nics-checked: true;
+    /// 具体网卡被平铺成两栏（偶数位进左栏、奇数位进右栏），见 service::tile_columns
+    in property <[string]> bind-left: [];
+    in property <[string]> bind-right: [];
+    /// 扁平勾选状态，下标口径 = 候选地址的次序（0 起）
+    in property <[bool]> bind-checked: [];
+    /// 折叠时显示"已绑定：…"（空串 = 不显示）
+    in property <string> bind-summary: "";
+    /// 展开状态。**纯界面状态，由界面自己持有**（Rust 不去碰它，所以刷新时不会被重置）
+    in-out property <bool> bind-expanded: false;
+    in property <bool> running: false;
+    in property <bool> busy: false;
+
+    // ---- 允许的操作（与「账号」同属访问控制，见下面分组处的说明）----
+    in-out property <bool> allow-all: false;
+    in-out property <bool> readonly-mode: false;
+    in-out property <bool> allow-upload: true;
+    in-out property <bool> allow-delete: false;
+    in-out property <bool> allow-search: true;
+    in-out property <bool> allow-archive: false;
+    // ★ 只是下面那个 ComboBox 的行号；语义在 `config::Compress`（见 ui/types.slint 开头）
+    in-out property <int> compress-index: 1;
+    in-out property <bool> allow-hash: false;
+    in-out property <bool> allow-symlink: false;
+
+    // ---- 账号（谁能进来；和上面的权限是一对）----
+    in-out property <bool> use-auth: false;
+    // 账号列表（可视化多账号）。单向 model：输入走回调进 Rust，
+    // Rust 只在增/删/加载时重建（每敲一个字都重建会把光标弄丢）。
+    in-out property <[AccountEntry]> accounts: [];
+    callback account-edited(int, int, string);
+    callback account-perm-changed(int, int);
+    callback account-removed(int);
+    callback account-added();
+
+    // ---- 最近的共享路径（新的在前）----
+    in property <[string]> recent-paths: [];
+    /// 「最近」下拉的当前项（-1 = 未选）
+    in-out property <int> recent-index: -1;
+    callback recent-path-picked(string);
+
+    callback pick-share-folder();
+    callback pick-share-file();
+    callback path-edited(string);
+    /// 即将展开具体网卡列表（让 Rust 先重新检测一遍网卡）
+    callback expand-bind();
+    callback bind-all-toggled(bool);
+    callback bind-toggled(int, bool);
+    callback refresh-nics();
+
+    // ★ 绝对不要拉伸:嵌套布局的 vertical-stretch 默认不是 0,
+    //   一旦让它拉伸,窗口变高时多余的空间会被它分走一半,
+    //   再逐层传给分组 -> 行 -> LineEdit,表现就是「输入框随窗口变高而被拉长」。
+    //   多余空间由 app.slint 里内容区末尾的占位 Rectangle 吸收。
+    vertical-stretch: 0;
+    spacing: Theme.gap;
+
+    function cfg-enabled() -> bool {
+        return Rules.cfg-enabled(root.running, root.busy);
+    }
+
+    function perm-enabled() -> bool {
+        return Rules.perm-enabled(root.running, root.busy, root.readonly-mode, root.allow-all);
+    }
+
+    function file-mode() -> bool {
+        return Rules.file-mode(root.path-is-file);
+    }
+
+    // ---------- 共享路径 ----------
+    Section {
+        title: @tr("共享的文件夹 / 文件");
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            LineEdit {
+                text <=> root.serve-path;
+                edited(t) => { root.path-edited(t); }
+                enabled: root.cfg-enabled();
+                placeholder-text: @tr("填写文件夹或文件的完整路径，也可将文件拖入窗口");
+                horizontal-stretch: 1;
+            }
+            // 单文件模式那条提醒原本是行灰字（只在单文件模式出现），改成常驻的「?」
+            TipMark { tip: @tr("单个文件模式：访问地址直接指向该文件，仅可查看与下载。"); }
+        }
+
+        // Windows 没有「文件或文件夹二选一」的原生对话框,所以是两个按钮,
+        // 各自弹对应的选择器(见 src/folder_picker.rs)。
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Button {
+                text: @tr("选择文件夹…");
+                enabled: root.cfg-enabled();
+                clicked => { root.pick-share-folder(); }
+            }
+            Button {
+                text: @tr("选择文件…");
+                enabled: root.cfg-enabled();
+                clicked => { root.pick-share-file(); }
+            }
+        }
+
+        // 最近用过的路径：反复换文件夹时省得重新找。
+        // model 为空时整行不显示（第一次用没历史）。
+        if root.recent-paths.length > 0 : HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: @tr("最近使用");
+                color: Theme.text-secondary;
+                font-size: Theme.font-hint;
+                vertical-alignment: center;
+                min-width: Theme.label-w-form;
+            }
+            ComboBox {
+                model: root.recent-paths;
+                // 两向绑定 + 选完由 Rust 重置成 -1：它是个“动作选择器”，
+                // 选完就归位，免得旧选择跟当前路径不一致。
+                current-index <=> root.recent-index;
+                enabled: root.cfg-enabled();
+                horizontal-stretch: 1;
+                selected(v) => { root.recent-path-picked(v); }
+            }
+        }
+
+        // 为什么要单独显示这一行：dufs 的 serve-path 会被两件事改写，而用户看不见 ——
+        //   1. 相对路径按 **dufs 进程的工作目录** 解析（本程序没给它指定工作目录，它继承
+        //      我们的；而我们的工作目录取决于程序是怎么启动的）；
+        //   2. dufs 会 canonicalize，**符号链接因此被解析成目标**，--allow-symlink 判断
+        //      「在不在根外面」也是按那个目标算的。
+        // 和用户填的是同一处时不显示（见 config::serve_path_hint），避免噪音。
+        if root.path-real-hint != "" : Hint {
+            text: @tr("→ 实际共享：{}", root.path-real-hint);
+        }
+        if !root.path-valid : Hint {
+            kind: HintKind.error;
+            text: @tr("路径不存在，或既不是文件夹也不是文件");
+        }
+    }
+
+    // ---------- 服务 ----------
+    Section {
+        title: @tr("服务");
+        inner-spacing: Theme.gap;
+
+        LabeledRow {
+            label: @tr("端口");
+            LineEdit {
+                text <=> root.port-text;
+                enabled: root.cfg-enabled();
+                input-type: InputType.number;
+                placeholder-text: "1 ~ 65535";
+                horizontal-stretch: 1;
+            }
+            if !Rules.port-ok(root.port-text) : Hint {
+                kind: HintKind.error;
+                text: @tr("端口取值范围为 1 ~ 65535");
+                vertical-alignment: center;
+            }
+        }
+
+        // ★ 多选（dufs 的 `-b` 是 append 型：实测 `-b a -b b` 两个都绑上）
+        //
+        // 布局取舍：绝大多数人就用「所有网卡」，所以**默认只占一行**。
+        // 第一版把所有具体网卡铺成一长列 + 滚动条 —— 又丑又占地方。
+        // 现在改成：折叠时一行，点「指定具体网卡…」才展开，展开后是**两列平铺**。
+        //
+        // 下标算法（必须和 service::tile_columns 严格一致）：
+        //   左栏第 i 项 = 候选里的第 2i 项，右栏第 j 项 = 第 2j+1 项。
+        //   错位的话，用户勾 A 会绑上 B，而且不会有任何报错。
+        LabeledRow {
+            label: @tr("监听网卡");
+            tip: @tr("「所有网卡」表示监听全部网络接口（含 IPv6），手机通过任意网络均可连接；仅勾选具体网卡时只监听所选地址，安全性更高。\n地址列表按局域网连通性排序，虚拟网卡（VPN / WSL）排在末尾。");
+            vertical-stretch: 0;
+
+            VerticalLayout {
+                spacing: 4px;
+                vertical-stretch: 0;
+                // ★ 不加这个，内容会缩到自身宽度、被父布局摆到行的中间去
+                //   （实测就是这样：复选框飘到了输入框右侧老远的地方）
+                horizontal-stretch: 1;
+
+                HorizontalLayout {
+                    spacing: Theme.gap;
+                    CheckBox {
+                        text: @tr("所有网卡（推荐）");
+                        checked: root.all-nics-checked;
+                        enabled: root.cfg-enabled();
+                        toggled => { root.bind-all-toggled(self.checked); }
+                    }
+                    Button {
+                        // 展开以后这个按钮变成「收起」
+                        text: root.bind-expanded ? @tr("收起") : @tr("指定具体网卡…");
+                        enabled: root.cfg-enabled();
+                        clicked => {
+                            // ★ 展开前先让 Rust 重新检测一遍网卡：点开就是要挑网卡，
+                            //   这一瞬间看到的必须是最新列表。不然刚插上的 USB 网卡
+                            //   不在里面，用户只会以为软件坏了（他不会想到先点「重新检测网卡」）。
+                            //   手动的那个按钮保留着，留给"我就是想强制重查一次"。
+                            if (!root.bind-expanded) {
+                                root.expand-bind();
+                            }
+                            root.bind-expanded = !root.bind-expanded;
+                        }
+                    }
+                    // 网卡列表只在**启动时**枚举一次，之后没有任何自动刷新 ——
+                    // 运行中插 USB 网卡 / 连 Wi-Fi / 开 VPN / 拔网线都要点它。
+                    // 按钮名不能只写「刷新」：那看不出刷的是什么（用户就得问）。
+                    Button {
+                        text: @tr("重新检测网卡");
+                        enabled: root.cfg-enabled();
+                        clicked => { root.refresh-nics(); }
+                    }
+                }
+
+                if root.bind-expanded : HorizontalLayout {
+                    spacing: Theme.gap;
+                    vertical-stretch: 0;
+
+                    VerticalLayout {
+                        spacing: 0px;
+                        for name[i] in root.bind-left : CheckBox {
+                            text: name;
+                            checked: root.bind-checked[i * 2];
+                            enabled: root.cfg-enabled();
+                            toggled => { root.bind-toggled(i * 2, self.checked); }
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 0px;
+                        for name[j] in root.bind-right : CheckBox {
+                            text: name;
+                            checked: root.bind-checked[j * 2 + 1];
+                            enabled: root.cfg-enabled();
+                            toggled => { root.bind-toggled(j * 2 + 1, self.checked); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 折叠时也要让用户看得见"到底绑了什么"，否则他会忘掉、然后纳闷手机为什么连不上
+        if !root.bind-expanded && root.bind-summary != "" : Hint {
+            text: root.bind-summary;
+        }
+
+    }
+
+    // ---------- 允许的操作 ----------
+    // 这一组是“起一个共享”最常拨的开关（用户反馈：为了一个勾切页很烦），所以放在本页。
+    // 这一页从此就是"共享什么 → 怎么听 → 允许干什么"，一条线走完。
+    //
+    // 顺序：**两个总开关在前** —— 「放开全部操作」是全开、「只读模式」是全关，
+    // 摆最上面；后面才是 6 个逐项（对应 dufs 源码里 -A 置位的那 6 个布尔值）。
+    Section {
+        title: @tr("允许的操作");
+
+        if root.file-mode() : Hint {
+            kind: HintKind.warn;
+            text: @tr("单文件模式下本组选项不适用，已置灰且不会传给 dufs。");
+        }
+
+        // ---- 「全开」和「全关」在同一行 ----
+        // ★ 「只读模式」是 UI 层的快捷开关（勾上 = 把下面 6 个逐项全关掉），
+        //   dufs 没有这个参数（--help 里没有任何 readonly / deny 选项）。
+        //   但“只读模式”和左边的“放开全部操作”正好是一对 —— 用户明确要它，所以留着。
+        HorizontalLayout {
+            spacing: Theme.gap;
+            CheckBox {
+                text: @tr("放开全部操作（--allow-all）");
+                checked <=> root.allow-all;
+                enabled: root.cfg-enabled() && !root.file-mode();
+            }
+            CheckBox {
+                text: @tr("只读模式");
+                checked <=> root.readonly-mode;
+                enabled: root.cfg-enabled() && !root.allow-all && !root.file-mode();
+            }
+        }
+        if root.allow-all && !root.file-mode() : Hint {
+            kind: HintKind.warn;
+            // ★ 把 -A 到底管哪几项写清楚（看 dufs 源码逐项对出来的）。
+            text: @tr("将同时开启以下 6 项：上传、删除、搜索、打包下载、?hash 校验、跟随外部符号链接。");
+        }
+
+        // ---- 逐项 ----
+        CheckBox {
+            text: @tr("允许上传");
+            checked <=> root.allow-upload;
+            enabled: root.perm-enabled() && !root.file-mode();
+        }
+        CheckBox {
+            text: @tr("允许删除");
+            checked <=> root.allow-delete;
+            enabled: root.perm-enabled() && !root.file-mode();
+        }
+        CheckBox {
+            text: @tr("允许搜索");
+            checked <=> root.allow-search;
+            enabled: root.perm-enabled() && !root.file-mode();
+        }
+        CheckBox {
+            text: @tr("允许把文件夹打包下载");
+            checked <=> root.allow-archive;
+            enabled: root.perm-enabled() && !root.file-mode();
+        }
+        // 压缩级别不是权限,所以 allow-all 打开时也要能改;
+        // 但它只在"能打包下载"时才有意义,所以这里不受 perm-enabled 约束。
+        LabeledRow {
+            label: @tr("打包压缩级别");
+            label-width: Theme.label-w-compress;
+            label-enabled: root.cfg-enabled()
+                && (root.allow-archive || root.allow-all)
+                && !root.readonly-mode
+                && !root.file-mode();
+            ComboBox {
+                // ★ 顺序必须与 `Compress::to_index/from_index` 一致（none/low/medium/high）
+                model: [@tr("不压缩"), @tr("低"), @tr("中"), @tr("高")];
+                current-index <=> root.compress-index;
+                enabled: root.cfg-enabled()
+                    && (root.allow-archive || root.allow-all)
+                    && !root.readonly-mode
+                    && !root.file-mode();
+                horizontal-stretch: 1;
+            }
+        }
+        CheckBox {
+            text: @tr("允许 ?hash 查询文件 SHA256");
+            checked <=> root.allow-hash;
+            enabled: root.perm-enabled() && !root.file-mode();
+        }
+        CheckBox {
+            text: @tr("允许跟随指向外部的符号链接");
+            checked <=> root.allow-symlink;
+            enabled: root.perm-enabled() && !root.file-mode();
+        }
+        if root.allow-symlink && !root.file-mode() : Hint {
+            kind: HintKind.warn;
+            text: @tr("开启后，共享路径内的符号链接可指向共享路径之外的任意位置。");
+        }
+    }
+
+    // ---------- 谁能访问 ----------
+    // 账号列表：可视化多账号（一个用户名写多行 = 它的多个路径，密码必须相同）。
+    // 用户名留空 = 匿名访问（多行会自动合并成一条匿名规则）。
+    Section {
+        title: @tr("账号");
+        inner-spacing: Theme.gap;
+
+        CheckBox {
+            text: @tr("启用账号访问");
+            checked <=> root.use-auth;
+            enabled: root.cfg-enabled();
+        }
+
+        if root.use-auth : VerticalLayout {
+            spacing: 4px;
+
+            // ★ 用户名/密码给**固定宽度**，剩下的全给路径。
+            //   用 stretch 比例（原来是 2:2:3）会让两个短框随窗口一起变宽，
+            //   而它们的内容（几个字的账号名）根本用不上那些宽度。
+            //
+            // ★★ 必须显式写 `min-width`：Slint 的 Fluent 样式把
+            //   `LineEdit` / `ComboBox` 的 min-width 定死成 `max(160px, …)`
+            //   （见 widgets/fluent/lineedit.slint）。四个 160px 加起就 686px，
+            //   比窗口内容区（600 窗口 572px）还宽 —— 后果是横向滚动条
+            //   一直存在，而且点进密码框时 Slint 会把它滚进视野、滚动条就冒出来。
+            //   这里逐个覆盖地板值，一行总最小宽度降到 ~430px，装得下。
+            //   字段宽度按 9 个字符算：9 × ~7.5px + 24px 内边距 + 2px 边框 ≈ 94px，
+            //   所以取 98px（留一点余量，9 个字符不触发内部滚动）。
+            //
+            // ★ 具体数值全在 `ui/theme.slint` 的「尺寸」一节（`account-*`），
+            //   而且按**英文**（"Read-only" / "Username"）定 —— 那里有推导与基准。
+            //   改字段数量/顺序时要回去重算这份预算（一行之和不能超内容区宽度）。
+            for entry[idx] in root.accounts : HorizontalLayout {
+                spacing: 4px;
+                LineEdit {
+                    placeholder-text: @tr("用户名");
+                    text: entry.name;
+                    edited(txt) => { root.account-edited(idx, 0, txt); }
+                    enabled: root.cfg-enabled();
+                    min-width: Theme.account-field-min;
+                    preferred-width: Theme.account-name-preferred;
+                    horizontal-stretch: 0;
+                }
+                LineEdit {
+                    placeholder-text: @tr("密码");
+                    text: entry.secret;
+                    input-type: InputType.password;
+                    edited(txt) => { root.account-edited(idx, 1, txt); }
+                    enabled: root.cfg-enabled();
+                    min-width: Theme.account-field-min;
+                    preferred-width: Theme.account-secret-preferred;
+                    horizontal-stretch: 0;
+                }
+                LineEdit {
+                    placeholder-text: @tr("/路径");
+                    text: entry.path;
+                    edited(txt) => { root.account-edited(idx, 2, txt); }
+                    enabled: root.cfg-enabled();
+                    min-width: Theme.account-path-min;
+                    horizontal-stretch: 1;
+                }
+                ComboBox {
+                    model: [@tr("读写"), @tr("只读")];
+                    current-index: entry.perm-index;
+                    // ★ 忽略下拉框的**文案**，只上报行号给 Rust。
+                    //   以前这里写的是 `selected(v) => { ... v == "只读" ? 1 : 0 }` ——
+                    //   拿显示文案当值：界面一翻成英文（"Read-only" != "只读"），
+                    //   账号权限就会被**静默写成读写**。
+                    //   combobox-base.slint 是先写 current-index 再回调 selected，
+                    //   所以这里读得到刚选中的行号。
+                    selected(_label) => {
+                        root.account-perm-changed(idx, self.current-index);
+                    }
+                    enabled: root.cfg-enabled();
+                    // ★ 宽度按英文 "Read-only" 定（中文「只读」只要 66px，
+                    //   但按中文定的话英文下会被裁 —— 见 theme.slint 的「尺寸」一节）
+                    min-width: Theme.account-perm-min;
+                    preferred-width: Theme.account-perm-min;
+                    horizontal-stretch: 0;
+                }
+                Button {
+                    text: "×";
+                    enabled: root.cfg-enabled();
+                    clicked => { root.account-removed(idx); }
+                    min-width: Theme.account-del-min;
+                    preferred-width: Theme.account-del-min;
+                    horizontal-stretch: 0;
+                }
+            }
+
+            Button {
+                text: @tr("+ 添加账号");
+                enabled: root.cfg-enabled();
+                clicked => { root.account-added(); }
+            }
+
+        }
+
+        Hint {
+            // ★ 特意标成 warn（橙色）：这一段里有"密码是明文、本机其它程序可读"这条
+            //   **安全警告**，不该藏进浮窗里等人来悬停。按"橙色留在页面上"的规则，
+            //   把它标橙既符合规则，也不会丢掉警告。
+            kind: HintKind.warn;
+            text: @tr("用户名留空表示匿名访问（不校验密码）；同一用户名可写多行，表示该账号的多个路径。\n密码以明文保存在配置文件和 dufs 命令行中，本机其它程序可读取。\n$6$ 开头的哈希可直接填写（dufs 按哈希校验）；其它 $...$ 格式会被当作明文密码，等同于未使用哈希。");
+        }
+    }
+
+    // ★ 不能在这里加 vertical-stretch: 1 的占位符 —— 占位符统一放在
+    //   app.slint 的内容区末尾,一个就够(多页同时只有一页可见)。
+}

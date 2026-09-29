@@ -1,0 +1,73 @@
+[package]
+name = "dufs-gui"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+description = "dufs 图形界面封装：一键在局域网内共享文件夹"
+default-run = "dufs-gui"
+readme = "README.md"
+repository = "https://github.com/stilltid/dufs-gui"
+keywords = ["dufs", "file-server", "gui", "slint", "windows"]
+# ★ 采用 GPL-3.0-only（因为 Slint 的三选一里走了 GPL 分支，见 LICENSING.md）。
+#   Slint 是 `GPL-3.0-only OR Slint-Royalty-free-2.0 OR Slint-Software-3.0`，
+#   本项目的选择必须与之一致。
+license = "GPL-3.0-only"
+# 本项目是带内嵌二进制的桌面应用，不是给人当依赖用的库，禁止误发到 crates.io。
+publish = false
+
+[dependencies]
+# ---- GUI ----
+# default-features = false：只保留 software 渲染器，不引入 skia / femtovg / OpenGL
+slint = { version = "1.18.0", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit",
+    "renderer-software",
+] }
+
+# ---- 功能 ----
+rfd = { version = "0.17.2", default-features = false }        # 原生"选择文件夹"对话框
+# windows-core：给 #[implement(IDropTarget)] 用（宏展开后引用 ::windows_core）
+windows-core = "0.62"
+qrcode = { version = "0.14.1", default-features = false }     # 注意：不能开默认特性，否则会拉进 image crate
+local-ip-address = "0.6.13"                                   # 枚举本机网卡 IP
+# 系统界面语言（`Language::System` 用）。★ 它**本来就在依赖树里**：
+# i-slint-core 的 std 特性已经拉了 0.3.2（见 Cargo.lock），
+# 所以这里是「提为直接依赖」而不是新增依赖 —— exe 体积、依赖数量都不变。
+sys-locale = "0.3.2"
+tray-icon = "0.25.1"                                          # 系统托盘（菜单通过 tray_icon::menu 使用，勿再单独依赖 muda）
+
+# ---- 配置持久化 ----
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",              # CreateJobObjectW 需要 SECURITY_ATTRIBUTES
+    "Win32_System_JobObjects",     # Job Object：防孤儿进程
+    "Win32_System_Threading",      # OpenProcess
+    "Win32_System_LibraryLoader",  # BeginUpdateResourceW / UpdateResourceW（往 exe 里写图标）
+    "Win32_System_Console",        # CREATE_NO_WINDOW
+    "Win32_System_Com",            # IDataObject / FORMATETC（拖放时读 CF_HDROP）
+    "Win32_System_Com_StructuredStorage", # STGMEDIUM / ReleaseStgMedium（同上）
+    "Win32_System_Ole",            # IDropTarget / RegisterDragDrop（原生文件拖放）
+    "Win32_System_SystemServices", # MODIFIERKEYS_FLAGS（拖放回调的签名里有它）
+    "Win32_System_Registry",       # 开机自启（HKCU\...\Run）
+    "Win32_Graphics_Gdi",          # MonitorFromPoint（判断上次的窗口位置还在不在屏幕上）
+    "Win32_UI_Shell",              # ShellExecuteW（UAC 提权 / 打开浏览器）
+    "Win32_UI_Controls",           # TaskDialogIndirect（关窗确认框：自定义按钮 + 不再询问）
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+embed-manifest = "1.5.1"
+slint-build = "1.18.0"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

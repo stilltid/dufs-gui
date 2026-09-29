@@ -1,0 +1,33 @@
+# 统一换行，避免「LF / CRLF」来回改写导致 diff 变脏、PR 冲突。
+# 约定：**仓库内一律 LF**；工作区也检出 LF（本项目仅 Windows，但 LF 对
+#       Rust / Slint / Markdown 都无害，且能让跨平台贡献者的 diff 保持干净）。
+* text=auto
+
+*.rs    text eol=lf
+*.slint text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.po    text eol=lf
+*.txt   text eol=lf
+LICENSE text eol=lf
+*.hbs   text eol=lf
+.gitattributes text eol=lf
+.gitignore     text eol=lf
+
+# 二进制：不让 Git 做行尾转换或文本合并
+*.exe   binary
+*.dll   binary
+*.ico   binary
+*.png   binary
+*.bmp   binary
+*.zip   binary
+
+# 锁文件不参与自动合并（冲突时宁可让人手动定）
+Cargo.lock -merge
+
+# 生成物
+target/** export-ignore
+dist/**   export-ignore

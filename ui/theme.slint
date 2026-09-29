@@ -1,0 +1,197 @@
+// 设计 token + 跨页复用的规则
+//
+// 为什么要有这一层：
+//   以前颜色、字号、间距直接写在各个分页里。改一次配色要满仓库找,
+//   而且同一个灰会写出 #6b7280 和 #6b7281 两种——「看起来一样但不一致」。
+//
+// ★ 这里只放「值」和「纯规则」,不放布局。
+//   token 命名按**用途**(text-secondary / pad-group),不按外观(#gray-500),
+//   这样以后换配色时名字不用跟着改。
+
+import { Palette } from "std-widgets.slint";
+
+export global Theme {
+    // ---------- 明暗（全项目唯一的判断处）----------
+    //
+    // ★ 为什么不用 `StyleMetrics.dark-color-scheme`：
+    //   它的定义只看 `Palette.color-scheme == ColorScheme.dark`，
+    //   而 fluent 的控件内部用的是 `FluentPalette.dark-color-scheme` ——
+    //   后者在 `Palette.color-scheme == unknown` 时会**回落到系统**。
+    //   两者不一致的后果就是「选跟随系统 + 系统是深色」时控件变深、
+    //   我们自己的文字还是浅色底上的深字，看不见。
+    //
+    // ★ 为什么拿 `Palette.background` 的颜色反推、而不用 `SlintInternal.color-scheme`：
+    //   `SlintInternal` 是**框架内部命名空间**，业务 .slint 里访问不到
+    //   （实测编译报 Cannot access id 'SlintInternal'）。
+    //   而 `Palette.background` 是 `FluentPalette.background` 的转出，后者的定义
+    //   正是 `dark-color-scheme ? #1C1C1C : #FAFAFA`，且 `dark-color-scheme`
+    //   在 unknown 时回落到系统 —— 拿它的颜色反推，和控件看到的是同一个值。
+    //   （代价：这里用的底色常量和下面 `window-bg` 是同一对，Fluent 改了要一起改。）
+    //
+    // ★ 为什么不能只判 `Palette.color-scheme == dark`：用户「深色 → 跟随系统」时，
+    //   我们只能把 Palette 写回 `unknown`（那条指向系统的初始绑定写不回去），
+    //   这时它不再等于 dark，只能靠 `background` 回落后的真实颜色。
+    out property <bool> dark: Palette.background == #1c1c1c;
+
+    // ---------- 颜色 ----------
+    // ★ 每个 token 都是「dark ? 深色值 : 浅色值」。冒号右边就是原来那套浅色值。
+    /// 窗口底色。显式给值（不再靠模板默认），浅 #FAFAFA / 深 #1C1C1C 抄的是
+    /// Fluent 的 `FluentPalette.background` —— 差一档就能看出「窗框和控件不是一套皮」。
+    out property <color> window-bg: dark ? #1c1c1c : #fafafa;
+    /// 主要文字(标签、标题、输入内容)
+    out property <color> text-primary: dark ? #f9fafb : #111827;
+    /// 说明性小字(灰)
+    out property <color> text-secondary: dark ? #9ca3af : #6b7280;
+    /// 次要正文(底部状态行)
+    out property <color> text-muted: dark ? #d1d5db : #374151;
+    /// 提醒(黄):这个选项有副作用,但还能用
+    out property <color> text-warn: dark ? #fbbf24 : #d97706;
+    /// 错误(红)
+    out property <color> text-error: dark ? #f87171 : #dc2626;
+    /// 被禁用/置灰的文字
+    out property <color> text-disabled: dark ? #6b7280 : #9ca3af;
+    out property <color> on-accent: white;
+
+    /// 分隔线
+    out property <color> divider: dark ? #374151 : #e5e7eb;
+    /// 运行中 / 拖拽高亮
+    out property <color> accent: dark ? #22c55e : #16a34a;
+    out property <color> accent-strong: dark ? #4ade80 : #22c55e;
+    /// 未运行的状态点
+    out property <color> idle: dark ? #6b7280 : #9ca3af;
+
+    // ---------- 字号 ----------
+    out property <length> font-title: 19px;
+    out property <length> font-body: 14px;
+    out property <length> font-hint: 12px;
+
+    // ---------- 间距 ----------
+    out property <length> gap: 8px;
+    /// 分组内部的紧凑间距
+    out property <length> gap-tight: 6px;
+    /// 窗口内容边距
+    out property <length> pad: 14px;
+    /// 分组内部边距
+    out property <length> pad-group: 8px;
+    out property <length> radius: 8px;
+
+    // ---------- 尺寸（宽度 / 直径）----------
+    //
+    // ★ 这些宽度一律按**英文**长度定，不按中文：
+    //   英文标签普遍更长，按中文定的宽度在英文界面下会出两种问题 ——
+    //     ① `LabeledRow` 的标签列是同组多行的**左对齐基准**。标签超出这一列时
+    //        只有那一行被撑宽，同组内控件的起点就参差不齐了；
+    //     ② 控件自己的 `min-width`（比如账号权限下拉框）不够宽时，
+    //        英文文案会被裁掉、或把旁边的输入框挤扁。
+    //   中文比英文短，所以按英文定的宽度在中文下只会「稍松」，不会出错。
+    //
+    // ★ 每个值后面注了**定它的那个英文标签**。估算口径：14px 字号下
+    //   小写约 7.2px/字符、大写约 9px、空格 4px，再加 ~14px 余量。
+    //   英文文案改了要回头看一眼这里（这也是把它们集中到本文件的全部理由）。
+    //
+    // ★ 为什么不是一个 token 管到底：这些标签分属**不同的 Section**
+    //   （HTTPS / 访问日志 / 外部文件 / 允许的操作 / 窗口 / 手机访问），
+    //   分组之间本来就不要求对齐（各有边框和标题），
+    //   所以按「本组最长的那条标签」分别定值，省下的横向空间留给输入框。
+
+    /// 表单标签列的**通用**宽度：标签都短的组（服务 / 关于 / 最近使用）
+    /// （英文基准：Interface ≈ 52px、Config file ≈ 55px）
+    out property <length> label-w-form: 66px;
+    /// 表单标签列：HTTPS 组（英文基准：Certificate ≈ 80px）
+    out property <length> label-w-https: 96px;
+    /// 表单标签列：访问日志组（英文基准：Log format ≈ 63px）
+    out property <length> label-w-log: 78px;
+    /// 表单标签列：外部文件组（英文基准：Dufs config ≈ 68px）
+    out property <length> label-w-extfile: 84px;
+    /// 表单标签列：允许的操作组（英文基准：Archive compression ≈ 124px）
+    out property <length> label-w-compress: 138px;
+    /// 表单标签列：窗口组（英文基准：On window close ≈ 102px）
+    out property <length> label-w-close: 116px;
+    /// 表单标签列：手机访问组（英文基准：Access address ≈ 95px）
+    out property <length> label-w-address: 110px;
+
+    /// 账号行的控件宽度。
+    ///
+    /// ★ 这一组是**互相制约**的：一行 5 个控件的 min 之和必须装进窗口内容区
+    ///   （600px 窗口 → 内容区 ~556px），否则横向滚动条会常驻。
+    ///   推导见 `ui/pages/share.slint` 账号区那段注释。
+    ///   用户名/密码按「9 个字符」算，权限下拉框按英文 "Read-only" 算。
+    out property <length> account-field-min: 98px;
+    out property <length> account-name-preferred: 112px;
+    out property <length> account-secret-preferred: 104px;
+    out property <length> account-path-min: 88px;
+    /// 英文 "Read-only" ≈ 60px 文本 + 12px 下拉箭头 + 22px 内边距
+    out property <length> account-perm-min: 96px;
+    out property <length> account-del-min: 32px;
+
+    /// 标题栏那个运行状态点的直径（圆角 = 直径/2，见 app.slint）
+    out property <length> status-dot: 10px;
+    // ---------- 悬浮说明（tooltip）----------
+    //
+    // ★ 这五个颜色/尺寸是**自绘**的（内置 Tooltip 的皮改不了，见 components/tip.slint）：
+    //   深色气泡在浅色界面上辨识度最高，也是各家 tooltip 的通行做法。
+    /// 气泡底色
+    out property <color> tip-bg: dark ? #f3f4f6 : #1f2937;
+    /// 气泡里的文字色
+    out property <color> tip-text: dark ? #111827 : #f9fafb;
+    /// 气泡圆角
+    out property <length> tip-radius: 6px;
+    /// 气泡内边距
+    out property <length> tip-pad-x: 10px;
+    out property <length> tip-pad-y: 8px;
+    /// 气泡与鼠标之间留的距离（免得压住指针）
+    out property <length> tip-offset: 14px;
+    /// 悬停多久才弹。和系统 tooltip 的手感对齐：划过一排「?」时不会一路弹。
+    out property <duration> tip-delay: 500ms;
+    /// 鼠标移开后隔多久收气泡。
+    /// ★ 为什么要一个"间隔"：`TouchArea` **没有** mouse-exit 回调（只有 `has-hover`
+    ///   属性），所以只能在"已弹出且鼠标已离开"时每 100ms 检查一次。
+    ///   这个开销可以忽略（只有气泡开着且鼠标已经走了才会跑），收尾延迟也看不出来。
+    out property <duration> tip-hide-poll: 100ms;
+    /// 「?」标记的直径（圆形边框）与其中的问号字号（= 直径 - 4）。
+    /// ★ 用圆圈而不是光秃秃一个「?」字符：单一个问号混在标签右边，
+    ///   看起来像文案没写完，不像"这里可以点/悬停"的入口。
+    out property <length> tip-mark: 14px;
+    /// 悬浮说明（tooltip）的宽度。
+    ///
+    /// ★ 为什么固定宽度而不是“按内容自适应”：内置 tooltip 的正文是 `StyledText`
+    ///   （**不换行**），长句子会变成一条几百像素宽的横条；而“自适应”那种写法
+    ///   （宽度依赖文字 preferred-width、文字宽度又依赖父宽）在 Slint 里有回环风险。
+    ///   固定宽度 + 文字换行 + 高度随之算出来，整条链是单向的。
+    /// 依据：最长的一条说明 95 个汉字 / 12px 字号 → 每行约 22 个汉字 → 5 行。
+    out property <length> tip-w: 264px;
+    /// 二维码边长（正方形）
+    out property <length> qr-size: 168px;
+}
+
+// 跨页复用的开关规则
+//
+// 单独抽出来是因为这些规则原来在各分页里各写了一遍,
+// 而它们编码的是**业务规则**(不是样式):
+//   - 运行中 / 处理中不许改配置
+//   - 只读模式和 allow-all 会让逐项权限失去意义
+//   - 单文件模式下很多东西没有意义
+// 规则只有一份,改的时候不会漏掉某一页。
+export global Rules {
+    /// 配置项能不能改:运行中 / 处理中都不许改
+    public pure function cfg-enabled(running: bool, busy: bool) -> bool {
+        return !running && !busy;
+    }
+
+    /// 逐项权限能不能改:只读模式和 allow-all 会让它们失去意义
+    public pure function perm-enabled(running: bool, busy: bool, readonly: bool, allow-all: bool) -> bool {
+        return !running && !busy && !readonly && !allow-all;
+    }
+
+    /// 是否处于「共享单个文件」模式
+    public pure function file-mode(path-is-file: bool) -> bool {
+        return path-is-file;
+    }
+
+    /// 端口框内容是不是 1~65535 的整数
+    /// ★ 原来在界面里写了两份（端口提示 + 底部启动按钮的可用条件），
+    ///   两份一旦不一致就会出现「按钮可点但输入框报错」。
+    public pure function port-ok(text: string) -> bool {
+        return text != "" && text.to-float() > 0 && text.to-float() <= 65535;
+    }
+}

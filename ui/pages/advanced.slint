@@ -1,0 +1,294 @@
+// 分页② 进阶
+//
+// 判定标准:**大多数人一辈子不动的东西**。
+//   跨域访问、目录隐藏、静态网站模式、HTTPS、访问日志,以及两个"喂给 dufs 的外部文件"。
+//
+// ★ 跨域和隐藏原先与账号同页（「访问与权限」，已拆并）：账号搬去「共享」页后
+//   只剩它俩，留个半空的分页不如并过来。两者都是低频项，放进阶开头正好。
+//
+// ★ URL 前缀也在这里 —— 它和 HTTPS 是**同一类**:都改对外地址的形态
+//   (scheme / path),二维码和"复制地址"都照着这个地址编。放一起才看得出关系
+//   （原先它和 HTTPS 分在两页,破了对称 —— 两者做的是同一件事:改对外地址的形态）。
+//
+// ★ 这一页原来叫「高级」,而且是个垃圾桶:里面还混着「关闭窗口时」和
+//   「清理与卸载」——那两项是**本软件**的设置,跟 dufs 参数没关系。
+//   现在那两项搬去了「应用」页,这一页只剩下纯粹的 dufs 参数。
+
+import { Button, CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
+import { Theme, Rules } from "../theme.slint";
+import { Section } from "../components/section.slint";
+import { Hint, HintKind } from "../components/hint.slint";
+import { LabeledRow } from "../components/labeled-row.slint";
+import { TipMark, TipCheckBox } from "../components/tip.slint";
+
+export component AdvancedPage inherits VerticalLayout {
+    // ---- 根窗口属性/回调(名字与 ui/app.slint 一致) ----
+    in-out property <bool> enable-cors: false;
+    in-out property <string> hidden: "";
+    // ★ 只是下面那个 ComboBox 的行号；语义在 `config::RenderMode`（见 ui/types.slint 开头）
+    in-out property <int> render-mode-index: 0;
+    in-out property <string> path-prefix: "";
+    in-out property <string> tls-cert: "";
+    in-out property <string> tls-key: "";
+    in-out property <string> log-file: "";
+    in-out property <string> log-format: "";
+    in-out property <bool> log-disabled: false;
+
+    // ---- 复选框那句说明（悬停显示）----
+    // ★ 写成页面根的属性而不是在 TipArea 和「?」各写一遍 @tr：两处都要引用同一句话，
+    //   引用一次属性，改的时候不会漏掉一处。
+    property <string> tip-log-disabled: @tr("可查看访问时间与被访问的文件。修改后需重启服务生效。");
+    in-out property <string> dufs-config: "";
+    in-out property <string> assets: "";
+    in-out property <string> extra-args: "";
+
+    in property <bool> path-is-file: false;
+    in property <bool> running: false;
+    in property <bool> busy: false;
+
+    callback pick-tls-file(string);
+    callback pick-config();
+    callback pick-assets();
+    callback open-access-log();
+
+    vertical-stretch: 0;
+    spacing: Theme.gap;
+
+    function cfg-enabled() -> bool {
+        return Rules.cfg-enabled(root.running, root.busy);
+    }
+
+    function file-mode() -> bool {
+        return Rules.file-mode(root.path-is-file);
+    }
+
+    // ---------- 跨域 ----------
+    // CORS **不是**文件操作权限：它只加一个响应头，不受只读模式 / 放开全部操作 /
+    // 单文件模式影响。手机浏览器直开是同源，用不上它；只有自写前端调 API 才要。
+    Section {
+        title: @tr("跨域访问");
+
+        CheckBox {
+            text: @tr("允许跨域访问（CORS）");
+            checked <=> root.enable-cors;
+            enabled: root.cfg-enabled();
+        }
+    }
+
+    // ---------- 列表显示 ----------
+    Section {
+        title: @tr("目录列表里隐藏");
+
+        // ★ 这一节没有 LabeledRow（标题就是分组名），所以「?」标记摆在输入框右边；
+        //   LineEdit 必须显式 horizontal-stretch —— 它原来是 VerticalLayout 的唯一子元素，
+        //   自动被拉满；进了 HorizontalLayout 不写就只占自身宽度。
+        HorizontalLayout {
+            spacing: Theme.gap;
+            LineEdit {
+                text <=> root.hidden;
+                enabled: root.cfg-enabled() && !root.file-mode();
+                placeholder-text: @tr("例如：tmp,*.log,*.lock,.git,node_modules");
+                horizontal-stretch: 1;
+            }
+            TipMark {
+                tip: @tr("以逗号分隔（支持全角逗号，多余空格会自动忽略）；通配符遵循 glob 语法：* ? [0-9]。\n仅与文件名匹配：填写 sub/a.log 这类含路径的写法不会生效。区分大小写。\n命中的文件不出现在目录列表中，但已知文件名时仍可直接访问。");
+            }
+        }
+
+        if root.file-mode() : Hint {
+            kind: HintKind.warn;
+            text: @tr("当前共享的是单个文件，访问者仅能浏览与下载该文件。「目录列表里隐藏」对单文件无意义，已置灰且不会传给 dufs。");
+        }
+    }
+
+    // ---------- 静态网站模式 ----------
+    Section {
+        title: @tr("静态网站模式");
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            ComboBox {
+                model: [@tr("不启用（仅列出目录）"), @tr("存在 index.html 时渲染，否则返回 404"),
+                         @tr("存在 index.html 时渲染，否则列出目录"), @tr("SPA（未知路径均返回 index.html）")];
+                // ★ 顺序必须与 `RenderMode::to_index/from_index` 一致（关/index/try-index/spa）
+                current-index <=> root.render-mode-index;
+                enabled: root.cfg-enabled() && !root.file-mode();
+                horizontal-stretch: 1;
+            }
+            TipMark {
+                tip: @tr("共享路径内存在前端构建产物时使用。\n注意：SPA 模式下仅一层未知路径（如 /dashboard）会回退到 index.html，更深的路径（如 /a/b）由 dufs 返回 404。");
+            }
+        }
+
+        if root.file-mode() : Hint {
+            kind: HintKind.warn;
+            text: @tr("单文件模式下没有目录可渲染，该选项不会传给 dufs。");
+        }
+
+    }
+
+    // ---------- HTTPS ----------
+    Section {
+        title: @tr("HTTPS（可选）");
+        inner-spacing: Theme.gap;
+
+        LabeledRow {
+            label: @tr("证书");
+            // 证书和私钥是一对，说明合起来写在第一行上
+            tip: @tr("两项均需填写。使用自签名证书时，手机浏览器会提示证书警告，首次访问需手动选择「继续前往」。\n启用后二维码中的地址自动变为 https://。");
+            label-width: Theme.label-w-https;
+            LineEdit {
+                text <=> root.tls-cert;
+                enabled: root.cfg-enabled();
+                placeholder-text: "server.pem / server.crt";
+                horizontal-stretch: 1;
+            }
+            Button {
+                text: @tr("选择…");
+                enabled: root.cfg-enabled();
+                clicked => { root.pick-tls-file("cert"); }
+            }
+        }
+
+        LabeledRow {
+            label: @tr("私钥");
+            label-width: Theme.label-w-https;
+            LineEdit {
+                text <=> root.tls-key;
+                enabled: root.cfg-enabled();
+                placeholder-text: "server.key";
+                horizontal-stretch: 1;
+            }
+            Button {
+                text: @tr("选择…");
+                enabled: root.cfg-enabled();
+                clicked => { root.pick-tls-file("key"); }
+            }
+        }
+
+    }
+
+    // ---------- URL 路径前缀 ----------
+    // 紧跟 HTTPS：两项都改对外地址的形态，二维码和"复制地址"都会跟着变。
+    Section {
+        title: @tr("URL 前缀（可选）");
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            LineEdit {
+                text <=> root.path-prefix;
+                enabled: root.cfg-enabled();
+                placeholder-text: @tr("例如 myfiles");
+                // 原来是 VerticalLayout 的独子、自动被拉满；进了横向布局要显式写
+                horizontal-stretch: 1;
+            }
+            TipMark {
+                tip: @tr("填写后访问地址变为 http://<ip>:<端口>/<前缀>（启用 HTTPS 时为 https://…）。二维码与「复制地址」会同步变化。\n该选项不属于访问控制：获得带前缀链接的任何人均可访问，仅起隐藏路径的作用。");
+            }
+        }
+
+    }
+
+    // ---------- 访问日志 ----------
+    Section {
+        title: @tr("访问日志");
+        inner-spacing: Theme.gap;
+
+        LabeledRow {
+            label: @tr("日志文件");
+            label-width: Theme.label-w-log;
+            LineEdit {
+                text <=> root.log-file;
+                enabled: root.cfg-enabled();
+                placeholder-text: @tr("留空则不记录到文件");
+                horizontal-stretch: 1;
+            }
+            Button {
+                text: @tr("查看");
+                clicked => { root.open-access-log(); }
+            }
+        }
+
+        LabeledRow {
+            label: @tr("日志格式");
+            label-width: Theme.label-w-log;
+            LineEdit {
+                text <=> root.log-format;
+                enabled: root.cfg-enabled() && !root.log-disabled;
+                placeholder-text: @tr("留空用 dufs 默认格式");
+                horizontal-stretch: 1;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 4px;
+            TipCheckBox {
+                text: @tr("关闭访问日志（不记录任何请求）");
+                checked <=> root.log-disabled;
+                enabled: root.cfg-enabled();
+                tip: root.tip-log-disabled;
+            }
+        }
+    }
+
+    // ---------- 喂给 dufs 的外部文件 ----------
+    // -c 和 --assets 归在一起:它们的共同点是"服务的行为由一份外部文件决定",
+    // 和上面那些"在界面里拨开关"的选项不是一类。
+    Section {
+        title: @tr("外部文件：配置文件与前端资源");
+        inner-spacing: Theme.gap;
+
+        LabeledRow {
+            label: @tr("配置文件");
+            // 这行还兼着 dufs 配置文件的说明（步骤多、且 .toml 不支持，必须写清）
+            tip: @tr("dufs 自身的配置文件（-c），可一次性写入全部选项。实测 dufs 0.46 仅支持 .json / .yaml（.toml 会报错）。\n其它页面中填写的选项会覆盖配置文件中的同名项。");
+            label-width: Theme.label-w-extfile;
+            LineEdit {
+                text <=> root.dufs-config;
+                enabled: root.cfg-enabled();
+                placeholder-text: @tr("留空则不用（只支持 .json / .yaml）");
+                horizontal-stretch: 1;
+            }
+            Button {
+                text: @tr("选择…");
+                enabled: root.cfg-enabled();
+                clicked => { root.pick-config(); }
+            }
+        }
+
+        LabeledRow {
+            label: @tr("前端资源");
+            tip: @tr("用于替换网页版界面（--assets）。该目录必须包含 index.html，否则 dufs 启动失败。\n目录中放置 404.html 可自定义未找到页面时的显示内容。");
+            label-width: Theme.label-w-extfile;
+            LineEdit {
+                text <=> root.assets;
+                enabled: root.cfg-enabled();
+                placeholder-text: @tr("留空则用 dufs 内置界面");
+                horizontal-stretch: 1;
+            }
+            Button {
+                text: @tr("选择…");
+                enabled: root.cfg-enabled();
+                clicked => { root.pick-assets(); }
+            }
+        }
+    }
+
+    // ---------- 额外命令行参数 ----------
+    Section {
+        title: @tr("额外命令行参数");
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            LineEdit {
+                text <=> root.extra-args;
+                enabled: root.cfg-enabled();
+                placeholder-text: @tr("例如 --allow-archive --compress high");
+                horizontal-stretch: 1;
+            }
+            TipMark {
+                tip: @tr("为尚未纳入界面的 dufs 选项保留，参数会拼接在最前面。使用 -h 可查看 dufs 支持的全部选项。\n注意：按空格切分，参数内含空格会出错；与界面已有选项重复时会被拦截并提示。");
+            }
+        }
+    }
+}

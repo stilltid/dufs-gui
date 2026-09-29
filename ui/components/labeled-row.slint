@@ -1,0 +1,49 @@
+// 「标签 + 内容」的一行
+//
+// 内容用 @children 塞进来(输入框 / 下拉框 / 按钮)。
+//
+// ★ label-width 用固定值而不是让标签自适应:同一页里多行的标签要左对齐,
+//   否则每个标签宽度不同,右边输入框的起点就会参差不齐。
+//   Text 自己带 min-width,所以超长标签也不会被裁掉。
+
+import { Theme } from "../theme.slint";
+import { TipMark } from "tip.slint";
+
+export component LabeledRow inherits HorizontalLayout {
+    in property <string> label: "";
+    /// 标签占多宽。同类行用同一个值,视觉上才会成一条竖线。
+    /// ★ 默认值按**英文**标签长度定（见 theme.slint 的「尺寸」一节）
+    in property <length> label-width: Theme.label-w-form;
+    /// 标签是否跟着禁用而变灰(不传则永远正常色)
+    in property <bool> label-enabled: true;
+    /// 这一行的说明：非空时**行尾多一个「?」**，悬停它才弹；空时什么都不出现。
+    /// ★ 触发只认这个图标（标签文字不响应悬停）—— 全项目统一，避免
+    ///   “有的地方移文字有反应、有的地方没有”。
+    in property <string> tip: "";
+
+    spacing: Theme.gap;
+
+    // ★ 标签文字**故意不做**悬停区：触发浮窗的形式统一成行尾那个「?」图标，
+    //   免得"有的地方移文字有反应、有的地方没有"这种不一致。
+    Text {
+        text: root.label;
+        vertical-alignment: center;
+        min-width: root.label-width;
+        color: root.label-enabled ? Theme.text-primary : Theme.text-disabled;
+    }
+
+    // 行尾的小「?」：给「不知道这里可以悬停」的人一个看得见的入口。
+    //
+    // ★ 位置在**行尾**（`@children` 之后），不是紧跟标签。
+    //   紧跟标签会把这一行右边的控件推右 12px+间距 —— 同一分组里若只有某几行
+    //   有提示，各行的输入框就不成一条竖线了（而「同类行标签等宽」正是这个组件
+    //   存在的理由）。放行尾占的是本来就空着的地方，对齐完全不受影响。
+    //
+    // ★ 用 `if` 而不是让 TipMark 自己 `visible: false`：布局**不保证**跳过
+    //   不可见元素，而 LabeledRow 全项目有几十行，真占了位置就是「每行右边多一个洞」。
+    @children
+
+    if root.tip != "" : TipMark {
+        tip: root.tip;
+    }
+}

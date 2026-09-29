@@ -1,0 +1,15 @@
+## 这个 PR 做了什么
+
+<!-- 一两句话说明动机与结果。若关联 issue，写 "Fixes #123"。 -->
+
+## 自查清单
+
+- [ ] `cargo test` 通过
+- [ ] 改到 `.slint` / 新增界面文案时：同时在 `translations/en/LC_MESSAGES/dufs-gui.po` 补了英文（`cargo test` 的 `slint的翻译不缺失也不多余` 会拦）
+- [ ] 改到 Rust 侧可见文案时：走的是 `i18n::t()`（不是硬编码中文）
+- [ ] 改到 dufs 选项拼装时：跑过 `cargo run -- --selftest-options`
+- [ ] 界面大改动附了截图（浅色 / 深色各一张更好）
+
+## 备注
+
+<!-- 你踩过的坑、放弃过的方案、需要 reviewer 特别留意的地方。 -->

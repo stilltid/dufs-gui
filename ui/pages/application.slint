@@ -1,0 +1,388 @@
+// 分页③ 应用
+//
+// 判定标准:**与 dufs 参数无关,改的是这个软件自己**。
+//
+// ★ 这一页就是这次重组的理由。
+//   以前本软件的设置被劈成两半(「窗口置顶」在共享页、「关闭窗口时」和
+//   「清理与卸载」在进阶页),用户想配"这个软件自己"得来回翻。
+//   现在全部集中在这里,而且顺序是「日常会调的 → 出问题才看的 → 破坏性的」:
+//     窗口与启动 → 本软件日志 → 恢复默认 → 防火墙 → 清除程序数据 → 关于
+
+import { Button, CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
+import { Theme, Rules } from "../theme.slint";
+import { Section } from "../components/section.slint";
+import { LabeledRow } from "../components/labeled-row.slint";
+import { TipMark, TipCheckBox } from "../components/tip.slint";
+import { Hint, HintKind } from "../components/hint.slint";
+
+export component ApplicationPage inherits VerticalLayout {
+    // ---- 根窗口属性/回调(名字与 ui/app.slint 一致) ----
+    // 关窗默认动作：0 = 直接退出程序，1 = 隐藏到托盘
+    in-out property <int> close-action-index: 0;
+    /// 界面语言：0 = 跟随系统，1 = 简体中文，2 = English（顺序同 `config::Language`）
+    in-out property <int> language-index: 0;
+    /// 明暗主题：0 = 跟随系统，1 = 浅色，2 = 深色（顺序同 `config::ThemeMode`）
+    in-out property <int> theme-index: 0;
+    in-out property <bool> confirm-on-close: true;
+    in-out property <bool> autostart: false;
+    in-out property <bool> autostart-serve: false;
+    /// 登录自启那一次静默进托盘（只影响注册表命令里的 --tray）
+    in-out property <bool> start-in-tray: false;
+    in-out property <bool> stay-on-top: false;
+    in-out property <bool> verbose-log: true;
+
+    // ---- 复选框那几句说明（悬停显示）----
+    // ★ 为什么写成页面根的属性而不是在复选框和「?」各写一遍 @tr：
+    //   Tooltip **不能**放进布局（编译器直接拒：Tooltip cannot be added to
+    //   HorizontalLayout），所以"整行悬停"只能挂在下游元素上 ——
+    //   复选框和「?」是两个元素，同一个 Tooltip 挂不到两处，
+    //   把文案抽成属性引用两次，至少不用把同一句话写两遍（改的时候不会漏一处）。
+    property <string> tip-stay-on-top: @tr("始终位于其它窗口之上，不会被资源管理器遮挡，便于拖放文件。");
+    property <string> tip-confirm-close: @tr("勾选（默认）：关闭窗口时先弹出确认框，可在框中勾选「不再询问」。\n不勾选：关闭窗口直接执行上方所选动作。");
+    property <string> tip-verbose-log: @tr("记录本程序自身的动作：生成的完整 dufs 命令行、等待就绪、网卡变化、拖放注册、配置读写等。\n关闭后仅记录关键事件（启动 / 失败），日志长度显著减少。每次启动程序都会清空。");
+    in property <string> fw-rules-text: "";
+    /// 只读（用于“自动共享但没开认证”的警告）
+    in property <bool> use-auth: false;
+
+    // ---- 关于/诊断(只读,启动时由 Rust 填一次) ----
+    in property <string> app-version: "";
+    in property <string> dufs-version: "";
+    in property <string> config-path: "";
+    in property <string> log-path: "";
+    in property <string> bin-dir: "";
+
+    callback refresh-rules();
+    callback cleanup-rules();
+    callback purge-data();
+    callback stay-on-top-changed(bool);
+    /// 界面语言下拉：**立即生效**（不重启）—— Slint 侧所有 @tr 文案会当场重算，
+    /// Rust 侧那几处由代码写进去的文字由 `service::apply_language()` 重灌。
+    callback language-changed(int);
+    callback theme-changed(int);
+    callback close-action-changed(int);
+    callback confirm-on-close-changed(bool);
+    callback autostart-changed(bool, bool, bool);
+    callback verbose-log-changed(bool);
+    callback open-log();
+    callback open-config();
+    callback open-log-folder();
+    callback clear-log();
+    /// true = 恢复本程序出厂默认; false = 按 dufs 原生默认(纯只读)
+    callback restore-defaults(bool);
+
+    vertical-stretch: 0;
+    spacing: Theme.gap;
+
+    // ---------- 界面语言 ----------
+    // ★ 放在最上面：它的作用对象就是整个界面，而且英文用户需要最快找到它。
+    // ★ 选项用**自称**（简体中文 / English）而不是「中文 / 英语」：
+    //   语言名按惯例不翻译，否则选错语言的人反而看不懂哪个是回到自己语言的。
+    Section {
+        title: @tr("界面语言");
+        LabeledRow {
+            label: @tr("语言");
+            tip: @tr("切换后立即生效，不需要重启程序。");
+            label-width: Theme.label-w-form;
+            ComboBox {
+                model: [@tr("跟随系统"), @tr("简体中文"), @tr("English")];
+                // ★ 两向绑定（和旁边那几个下拉框一致）：单向绑定会被 ComboBox
+                //   内部的 `self.current-index = index` 打断（实测过，见实施计划
+                //   Step 2 的记录），于是 Rust 那边再改 language-index 就不生效了。
+                current-index <=> root.language-index;
+                // 双向绑定已经写回去了，回调只负责通知 Rust 存盘 + 切语言。
+                // 忽略字符串、只上报行号 —— 拿文案当值的话，翻译一改就错位。
+                selected(_label) => { root.language-changed(self.current-index); }
+            }
+        }
+    }
+
+    // ---------- 外观 ----------
+    // ★ 紧挨「界面语言」：两者都是"作用于整个界面"的设置，放一起最好找。
+    //   下拉框里只有**明暗配色**，没有 Fluent/Material 那种"控件风格"——
+    //   后者是 Slint 的**编译期**绑定，运行期换不了。
+    Section {
+        title: @tr("外观");
+        LabeledRow {
+            label: @tr("主题");
+            tip: @tr("「跟随系统」会随 Windows 的浅色/深色设置自动变化。切换后立即生效，不需要重启程序。");
+            label-width: Theme.label-w-form;
+            ComboBox {
+                model: [@tr("跟随系统"), @tr("浅色"), @tr("深色")];
+                // ★ 两向绑定（和语言下拉框一致）：单向绑定会被 ComboBox 内部的
+                //   `self.current-index = index` 打断。
+                current-index <=> root.theme-index;
+                // 忽略字符串、只上报行号 —— 拿文案当值的话，翻译一改就错位。
+                selected(_label) => { root.theme-changed(self.current-index); }
+            }
+        }
+    }
+
+    // ---------- 窗口 ----------
+    Section {
+        title: @tr("窗口");
+        inner-spacing: Theme.gap;
+
+        HorizontalLayout {
+            spacing: 4px;
+            TipCheckBox {
+                text: @tr("窗口置顶");
+                checked <=> root.stay-on-top;
+                toggled => { root.stay-on-top-changed(root.stay-on-top); }
+                tip: root.tip-stay-on-top;
+            }
+        }
+
+        LabeledRow {
+            label: @tr("关闭窗口时");
+            tip: @tr("直接退出：先停止服务，再退出程序。\n隐藏到托盘：窗口隐藏到右下角托盘，服务继续运行（手机仍可访问）；完全退出请使用托盘右键菜单中的「退出」。");
+            label-width: Theme.label-w-close;
+            ComboBox {
+                model: [@tr("直接退出程序"), @tr("隐藏到托盘")];
+                current-index <=> root.close-action-index;
+                // current-index 已双向绑定，回调只负责通知 Rust 存盘
+                selected(v) => { root.close-action-changed(root.close-action-index); }
+                horizontal-stretch: 1;
+            }
+        }
+        HorizontalLayout {
+            spacing: 4px;
+            TipCheckBox {
+                text: @tr("关闭窗口前先询问");
+                checked <=> root.confirm-on-close;
+                toggled => { root.confirm-on-close-changed(root.confirm-on-close); }
+                tip: root.tip-confirm-close;
+            }
+        }
+    }
+
+    // ---------- 开机与自动共享 ----------
+    Section {
+        title: @tr("开机与自动共享");
+        inner-spacing: Theme.gap;
+
+        // 这组三个勾选框的说明（"前两项均勾选会怎样…"）挂在第一个上：
+        // 它讲的就是"这几个勾选组合起来是什么效果"。
+        TipCheckBox {
+            text: @tr("登录 Windows 后自动运行本程序");
+            checked <=> root.autostart;
+            toggled => { root.autostart-changed(root.autostart, root.autostart-serve, root.start-in-tray); }
+            tip: @tr("前两项均勾选：登录后自动启动服务并开始共享。\n仅勾选第二项：手动打开程序时也自动开始共享。\n第三项仅作用于「登录后自动运行」：勾选后登录时静默进入托盘，不显示窗口（手动双击 exe 始终显示窗口）。\n自启项记录的是当前 exe 的路径，程序移动位置后需重新勾选。");
+        }
+        CheckBox {
+            text: @tr("启动后自动开始共享");
+            checked <=> root.autostart-serve;
+            toggled => { root.autostart-changed(root.autostart, root.autostart-serve, root.start-in-tray); }
+        }
+        CheckBox {
+            text: @tr("静默启动（直接进托盘，不弹窗口）");
+            checked <=> root.start-in-tray;
+            enabled: root.autostart;
+            toggled => { root.autostart-changed(root.autostart, root.autostart-serve, root.start-in-tray); }
+        }
+        if root.autostart-serve && !root.use-auth : Hint {
+            kind: HintKind.warn;
+            text: @tr("未启用账号认证。自动开始共享后，同一局域网内的任何设备均可访问（可在「共享」页设置账号密码）。");
+        }
+    }
+
+    // ---------- 本软件的日志 ----------
+    // ★ 这和「进阶 → 访问日志」是两回事:
+    //   那个是 **dufs** 记录的"谁访问了什么"(给对方看的);
+    //   这个是**本程序**记录的"自己干了什么"(给自己排障用的)。
+    Section {
+        title: @tr("本程序日志（用于排障）");
+        inner-spacing: Theme.gap;
+
+        HorizontalLayout {
+            spacing: 4px;
+            TipCheckBox {
+                text: @tr("详细日志");
+                checked <=> root.verbose-log;
+                toggled => { root.verbose-log-changed(root.verbose-log); }
+                tip: root.tip-verbose-log;
+            }
+        }
+
+        LineEdit {
+            text: root.log-path;
+            read-only: true;
+            horizontal-alignment: center;
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Button {
+                text: @tr("打开日志");
+                clicked => { root.open-log(); }
+            }
+            Button {
+                text: @tr("打开所在文件夹");
+                clicked => { root.open-log-folder(); }
+            }
+            Button {
+                text: @tr("清空日志");
+                clicked => { root.clear-log(); }
+            }
+        }
+    }
+
+    // ---------- 恢复默认 ----------
+    // 两个按钮而不是一个,因为"默认"在这里有两套、结果并不一样:
+    //   本程序出厂默认 = 上传 + 搜索 是开的(为了"手机传文件"这个主场景)
+    //   dufs 原生默认   = 全部权限关掉,也就是**纯只读**
+    Section {
+        title: @tr("恢复默认设置");
+        inner-spacing: Theme.gap;
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Button {
+                text: @tr("恢复本程序默认…");
+                clicked => { root.restore-defaults(true); }
+            }
+            Button {
+                text: @tr("按 dufs 原生默认（纯只读）…");
+                clicked => { root.restore-defaults(false); }
+            }
+            TipMark {
+                tip: @tr("两套默认值不同：\n· 本程序出厂默认：允许上传与允许搜索（便于手机向电脑传输文件）\n· dufs 原生默认：全部权限关闭，即纯只读（最安全）\n两套均会将端口恢复为 5000、监听网卡恢复为「所有网卡」；共享路径不会被清除。");
+            }
+        }
+    }
+
+    // ---------- 防火墙 ----------
+    // 原来它和「清除程序数据」挤在同一个叫「清理与卸载」的分组里,
+    // 但放行规则是**系统状态**(你可以只清规则、不卸载),分开才说得清。
+    Section {
+        title: @tr("Windows 防火墙");
+        inner-spacing: Theme.gap;
+
+        Text {
+            text: root.fw-rules-text;
+            color: Theme.text-primary;
+            font-size: Theme.font-hint;
+            wrap: word-wrap;
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Button {
+                text: @tr("刷新");
+                clicked => { root.refresh-rules(); }
+            }
+            // 原来这行灰字是下面那段规则文字的标题，改成「刷新」旁边的「?」
+            TipMark { tip: @tr("Windows 防火墙中为 dufs 添加的放行规则："); }
+            Button {
+                text: @tr("清理放行规则…");
+                clicked => { root.cleanup-rules(); }
+            }
+            TipMark {
+                tip: @tr("放行按端口添加规则（规则名形如 dufs-gui-5000）。更换端口后会残留多条旧规则，可在此一并清理。清理需要管理员权限，会弹出一次 UAC。");
+            }
+        }
+
+    }
+
+    // ---------- 清除程序数据 ----------
+    Section {
+        title: @tr("清除程序数据");
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Button {
+                text: @tr("清除程序数据 / 卸载…");
+                clicked => { root.purge-data(); }
+            }
+            TipMark {
+                tip: @tr("将删除释放出的 dufs 与界面设置（位于 %LOCALAPPDATA% 与 %APPDATA%，约 4.8 MB）。\n不会删除共享文件夹；dufs-gui.exe 需自行删除。执行前会先确认一次。");
+            }
+        }
+
+
+    }
+
+    // ---------- 关于 ----------
+    Section {
+        title: @tr("关于");
+        inner-spacing: Theme.gap;
+
+        // ★ 四行的“值”都要 `horizontal-stretch: 1`：
+        //   Slint 的布局在“总 stretch 为 0”时会把多余空间**均分给所有子项**，
+        //   所以前两行（值没写 stretch）会被推成居中，后两行（有 stretch）才是靠左 ——
+        //   同一个分组里两种对齐。让值吃满剩余宽度就统一靠左了。
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: @tr("本程序");
+                min-width: Theme.label-w-form;
+                color: Theme.text-secondary;
+                font-size: Theme.font-hint;
+            }
+            Text {
+                text: root.app-version;
+                color: Theme.text-primary;
+                font-size: Theme.font-hint;
+                horizontal-stretch: 1;
+            }
+        }
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: "dufs";
+                min-width: Theme.label-w-form;
+                color: Theme.text-secondary;
+                font-size: Theme.font-hint;
+            }
+            Text {
+                text: root.dufs-version;
+                color: Theme.text-primary;
+                font-size: Theme.font-hint;
+                horizontal-stretch: 1;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: @tr("配置文件");
+                min-width: Theme.label-w-form;
+                color: Theme.text-secondary;
+                font-size: Theme.font-hint;
+            }
+            Text {
+                text: root.config-path;
+                color: Theme.text-primary;
+                font-size: Theme.font-hint;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+        }
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Text {
+                text: @tr("dufs 目录");
+                min-width: Theme.label-w-form;
+                color: Theme.text-secondary;
+                font-size: Theme.font-hint;
+            }
+            Text {
+                text: root.bin-dir;
+                color: Theme.text-primary;
+                font-size: Theme.font-hint;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Button {
+                text: @tr("打开配置文件");
+                clicked => { root.open-config(); }
+            }
+            TipMark {
+                tip: @tr("配置为明文 JSON。界面显示异常时可打开核对（修改后需重启程序）。");
+            }
+        }
+    }
+}

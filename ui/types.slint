@@ -1,0 +1,31 @@
+// 跨页面共用的类型。
+//
+// ★ 这里**只有 `Tab`**，没有 `Perm` / `Compress` / `RenderMode` —— 那不是漏了，
+//   是这三个不适合放在 Slint 侧，原因值得写下来（不然下一个人会"顺手"加回来）：
+//
+//   那三个的值全都只被 ComboBox 当**行号**用，而且 ComboBox 必须能被 Rust
+//   反向驱动（加载配置 / 恢复默认时把显示改回去）。而 Slint 里给带**单向绑定**
+//   的属性赋值会**打断绑定**：`i-slint-core/properties.rs` 的 `intercept_set_binding`
+//   默认返回 false，注释原话是 the binding will simply be removed，只有两向绑定
+//   （`<=>`）会把它拦下来并双向传播。ComboBox 内部干的正是
+//   `self.current-index = index`（见 `i-slint-compiler/widgets/common/combobox-base.slint`）。
+//
+//   所以 `current-index: Rules.x-to-index(root.x)` 这种写法在用户点过一次下拉框
+//   之后就不再跟着 `root.x` 走了 —— 表现是「恢复默认设置后，下拉框还显示旧值」。
+//
+//   结论：那三个在 Rust 侧是枚举（`config.rs::Perm` / `Compress` / `RenderMode`），
+//   Slint 侧只保留一个 `int` 行号 + `<=>`；「行号 ⇄ 语义」的换算是**单一来源**，
+//   就在那几个枚举的 `to_index` / `from_index` 里（它们同时是命令行参数的来源）。
+//
+//   `tab` 不一样：它不是 ComboBox 的值，而是被 6 处 `==` 判断（分页头 3 处 +
+//   页面切换 3 处）。用 `0/1/2` 就是纯魔术数字，所以它是枚举。
+//
+// ⚠ 枚举要在 Rust 里可见（Rust 要 `set_tab`），所以 `app.slint` 里必须**同时**写两行：
+//       import { Tab } from "types.slint";     // 本文件内使用
+//       export { Tab } from "types.slint";     // 进公开 API
+//   只写 `import` 的话，Rust 侧拿到的是一个 `#[deprecated]` 别名（实测）。
+export enum Tab {
+    share,
+    advanced,
+    application,
+}

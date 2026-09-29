@@ -1,0 +1,64 @@
+// 关窗确认弹层里的「卡片」内容：标题 + 两个动作 + 「不再询问」+ 取消。
+//
+// ★ 弹层本身（`PopupWindow` / 遮罩 / 焦点与 Esc、Enter）**故意留在 `ui/app.slint`**：
+//   把它也抽成 `inherits PopupWindow` 的组件实测走不通 ——
+//     · 组件内部的 `changed open → self.show()` 不生效（弹层不出现）；
+//     · 跨组件后 `forward-focus` 失效，Esc/Enter 收不到；
+//     · 外层也无法调用组件里的函数（`Cannot access … inside of a Window`）。
+//   所以只有纯展示的卡片内容放这里，弹层的机械部分和 popup 同层。
+
+import { Button, CheckBox } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+
+export component CloseConfirmCard inherits VerticalLayout {
+    /// 「以后不再询问」勾选状态（两向：勾了要读回给 Rust）
+    in-out property <bool> never-ask: false;
+    /// 默认动作：true = 隐藏到托盘，false = 直接退出（决定哪个按钮 primary）
+    in property <bool> default-tray: false;
+
+    /// 0 = 取消，1 = 直接退出，2 = 隐藏到托盘
+    callback respond(int);
+
+    width: 100%;
+    padding: Theme.pad;
+    spacing: Theme.gap;
+
+    Text {
+        text: @tr("是否关闭窗口？");
+        font-size: Theme.font-body;
+        font-weight: 600;
+        color: Theme.text-primary;
+    }
+    Text {
+        text: @tr("请选择关闭方式：");
+        font-size: Theme.font-hint;
+        color: Theme.text-secondary;
+        wrap: word-wrap;
+    }
+    HorizontalLayout {
+        spacing: Theme.gap;
+        Button {
+            text: @tr("直接退出程序");
+            primary: !root.default-tray;
+            horizontal-stretch: 1;
+            clicked => { root.respond(1); }
+        }
+        Button {
+            text: @tr("隐藏到托盘");
+            primary: root.default-tray;
+            horizontal-stretch: 1;
+            clicked => { root.respond(2); }
+        }
+    }
+    CheckBox {
+        text: @tr("以后不再询问，直接按本次选择执行");
+        checked <=> root.never-ask;
+    }
+    HorizontalLayout {
+        alignment: end;
+        Button {
+            text: @tr("取消");
+            clicked => { root.respond(0); }
+        }
+    }
+}

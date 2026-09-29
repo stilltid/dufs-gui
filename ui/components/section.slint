@@ -1,0 +1,28 @@
+// 统一内边距与间距的分组容器
+//
+// 背景:每个分组原来都重复写
+//     GroupBox { title: "…"; VerticalLayout { padding: 8px; spacing: 6px; … } }
+//
+// 两个细节:
+//   1. GroupBox 的子元素会进入它内部的一个 GridLayout,所以这里包一层
+//      VerticalLayout 保证纵向排列(否则多个子元素会被当成网格的一行)。
+//   2. 内边距交给 GroupBox 自己的 `content-padding`,不再在里层再写一遍
+//      padding —— 双层 padding 会得到 16px,和设计意图不符。
+
+import { GroupBox } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+
+export component Section inherits GroupBox {
+    /// 分组内部的紧凑间距(默认 6px;需要更松的行间距时传 8px)
+    in property <length> inner-spacing: Theme.gap-tight;
+
+    content-padding: Theme.pad-group;
+
+    VerticalLayout {
+        // ★ 和分页根布局一样显式写 0:嵌套布局的 vertical-stretch 默认不是 0,
+        //   不写的话窗口变高时多余高度会被它分走,把输入框拉长。
+        vertical-stretch: 0;
+        spacing: root.inner-spacing;
+        @children
+    }
+}

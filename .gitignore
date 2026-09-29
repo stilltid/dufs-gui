@@ -1,0 +1,8 @@
+/target
+/dist
+/*.zip
+
+# icon_tool export 产出的预览图（生成物，不入库）
+assets/preview.bmp
+/.vscode
+/.idea

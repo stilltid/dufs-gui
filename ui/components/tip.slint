@@ -1,0 +1,184 @@
+//! 悬浮说明（tooltip）—— 自绘版。
+//!
+//! # 为什么不用 Slint 内置的 `Tooltip`
+//!
+//! 内置的省事（hover 判定、0.5s 延时、贴鼠标、输入穿透都现成），但**皮是改不了的**：
+//! 编译器固定插入一个 `ToolTipImpl`（浅色底 + `Palette.border` 1px 边 + 4px 圆角 +
+//! 9/6 内边距），我只能改里面的文字。实测下来它看着像"系统默认控件"，与本程序
+//! 自己的配色不搭，所以改成用 `PopupWindow` 自绘。
+//!
+//! 自绘拿到的能力：底色/字色/圆角/内边距/宽度全部可控。
+//! 需要自己做的：悬停状态、延时定时器、位置 —— 就是下面 `TipArea` 干的事。
+//!
+//! ★ 两个实测出来的约束（顺带记录，免得下次又踩）：
+//!   1. 内置 `Tooltip` **不能**放进四种布局（Vertical/Horizontal/Grid/Flexbox），
+//!      只能挂在 Text / CheckBox / Button 这类非布局元素上 —— 自绘没有这个限制。
+//!   2. `PopupWindow` **可以**声明在任意元素里（Slint 自己的测试就把它放在
+//!      `TouchArea` 里面），所以每个悬停区各带一个气泡是可行的。
+//!
+//! # 为什么把悬停区做成 `TouchArea` 的父元素
+//!
+//! `TouchArea` 的 hover 是在 `input_event_filter_before_children` 阶段记录的，
+//! 也就是**先于子元素**收到鼠标移动；而且它返回的
+//! `ForwardAndInterceptGrab` 的语义是"照常转发给子元素，但自己也会继续收到事件"
+//! （见 i-slint-core/input.rs）。所以：
+//!   - 子元素（复选框、按钮、输入框）的点击**不受影响**；
+//!   - 悬停也能被我们看见。
+//!
+//! 反过来把 `TouchArea` 当**兄弟元素叠在上面**就不行 —— 它会抢掉点击
+//! （Slint 文档里那个 "event-blocker" 例子演示的就是这件事）。
+
+import { CheckBox } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+
+/// 悬停检测区：把要检测悬停的元素放进来即可。
+///
+/// ```slint
+/// TipArea {
+///     tip: @tr("这句说明");
+///     CheckBox { text: @tr("窗口置顶"); }
+/// }
+/// ```
+///
+/// ★ 它没有"首选尺寸"（`TouchArea` 不参与布局计算），所以**放它的人必须给尺寸**：
+///   横向一般给 `horizontal-stretch: 1` 或固定宽度，纵向给
+///   `height: <里面那个控件的>.preferred-height`。不写的话这一行会塌成 0 高。
+export component TipArea inherits TouchArea {
+    /// 说明文字。空 = 这个区域不弹东西。
+    in property <string> tip: "";
+
+    // ---------- 气泡本体 ----------
+    //
+    // 每个悬停区各带一个：同一时刻鼠标只可能在**一个**区域上，所以不会同时弹两个；
+    // 而 `PopupWindow` 是独立小窗口，天然不会被 ScrollView 裁掉（自己画一层浮层才会）。
+    popup := PopupWindow {
+        // ★ x/y 是**相对锚点元素**（也就是本 TipArea）的，**不是窗口坐标**。
+        //   依据：i-slint-core/window.rs 的 `show_popup()` 里写着
+        //       position = parent_item.geometry().origin + popup_access_position()
+        //   即"锚点元素的原点 + 这里的 x/y"。
+        //   而 `mouse-x/y` 本来就是**元素内**坐标 —— 所以直接用它就是"贴鼠标"。
+        //   ⚠ 别再自己加 `absolute-position`：那是把偏移算了两遍，
+        //     气泡会跑到元素位置再往右下各偏一段（我第一版就是这么错的）。
+        //   写成绑定而不是在 moved 里改值：绑定会自己跟着鼠标走，不用手动同步。
+        x: root.mouse-x;
+        y: root.mouse-y + Theme.tip-offset;
+        width: bubble.width;
+        height: bubble.height;
+        // ★ `no-auto-close`：收起**完全由我们管**（下面的 hide 定时器）。
+        //   用默认的 close-on-click 会有个难看的来回：点一下复选框 → 气泡被关掉 →
+        //   鼠标还在原地 → 500ms 后气泡又弹回来。
+        //   而且"鼠标是否还在"是 `has-hover` **状态**（不是事件），轮询一定能看到，
+        //   所以自己管不会漏收。
+        close-policy: no-auto-close;
+
+        bubble := Rectangle {
+            // ★ 宽度 = min(上限, 文字自然宽度 + 内边距)。不能只写 max-width：
+            //   实测 Slint 对"非布局子元素"只按 preferred-width 算，max-width 不参与，
+            //   于是长句会变成一条几百像素宽的横条。
+            //   而 preferred-width 是"不换行时的自然宽度"、**不受 width 影响**，
+            //   所以这条绑定不会形成回环；宽度定了以后 height 里的换行行数也能算出来。
+            width: min(Theme.tip-w, body.preferred-width + Theme.tip-pad-x * 2);
+            height: body.preferred-height + Theme.tip-pad-y * 2;
+            background: Theme.tip-bg;
+            border-radius: Theme.tip-radius;
+
+            body := Text {
+                x: Theme.tip-pad-x;
+                y: Theme.tip-pad-y;
+                width: parent.width - Theme.tip-pad-x * 2;
+                text: root.tip;
+                wrap: word-wrap;
+                font-size: Theme.font-hint;
+                color: Theme.tip-text;
+            }
+        }
+    }
+
+    // ---------- 悬停 -> 延时 -> 弹出 ----------
+    //
+    // 用 Timer 而不是立刻弹：鼠标划过一排「?」时不该一路弹气泡，
+    // 这个延时（500ms）和系统 tooltip 的手感对齐。
+    // `running` 里的 `!popup.is-open` 让定时器到点后自己停掉（一次性）。
+    // ★ 判断"弹出来没有"只认 `popup.is-open`，不自己拿一个 bool 记 ——
+    //   自己记的话，"气泡被别的方式关掉"之后那个 bool 会残留为真，
+    //   于是这个区域**再也不弹**（这个 bug 我写着写着就犯了一次）。
+    Timer {
+        interval: Theme.tip-delay;
+        running: root.has-hover && root.tip != "" && !popup.is-open;
+        triggered => {
+            popup.show();
+        }
+    }
+
+    // ---------- 鼠标移开 -> 收起 ----------
+    //
+    // ★ `TouchArea` **没有** mouse-exit 回调（只有 `has-hover` 属性，而 Slint 里
+    //   没有"属性变化"钩子），所以只能轮询。这个定时器**只在"气泡已弹出且鼠标已经
+    //   离开"时**才跑：`running` 里两个条件缺一不可，开销可以忽略，
+    //   而 100ms 的收尾延迟肉眼看不出来。
+    //   顺带：鼠标移到气泡上时也算"离开"（气泡是独立窗口）—— 于是气泡不会赖在
+    //   光标底下不走，这正是想要的。
+    Timer {
+        interval: Theme.tip-hide-poll;
+        running: popup.is-open && !root.has-hover;
+        triggered => {
+            popup.close();
+        }
+    }
+}
+
+/// 「?」小标记：鼠标移到它上面就弹一句说明。
+///
+/// ★ 画成**圆圈里一个问号**而不是光秃秃的「?」字符：单一个问号混在标签右边，
+///   看起来像文案没写完，不像一个"这里还有说明"的入口。
+export component TipMark inherits TipArea {
+    width: Theme.tip-mark;
+    height: Theme.tip-mark;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: Theme.tip-mark / 2;
+        background: transparent;
+        border-width: 1px;
+        border-color: Theme.text-disabled;
+
+        Text {
+            width: 100%;
+            height: 100%;
+            text: "?";
+            color: Theme.text-disabled;
+            font-size: Theme.tip-mark - 4px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+/// 带说明的复选框行 = 复选框 + 行尾「?」。
+///
+/// ★ 悬停只认行尾那个「?」：复选框本体不响应悬停（全项目统一成图标触发）。
+///   `CheckBox` 是标准控件，没法往它里面塞东西，所以「?」只能放在它旁边。
+export component TipCheckBox inherits HorizontalLayout {
+    in property <string> text: "";
+    in-out property <bool> checked <=> cb.checked;
+    in property <bool> enabled: true;
+    /// 悬停说明。空 = 没有「?」也不弹。
+    in property <string> tip: "";
+    callback toggled;
+
+    spacing: 4px;
+
+    // 占满整行：整行都能点（「?」被推到行尾，与其它行的标记对齐成一条竖线）
+    cb := CheckBox {
+        horizontal-stretch: 1;
+        text: root.text;
+        // ★ 不要在这里再写 `checked <=> root.checked`：组件属性声明上的
+        //   `<=>` 已经建立了双向绑定，再写一遍就是一个环
+        //   （编译器会直接报 "part of a binding loop"）。
+        enabled: root.enabled;
+        toggled => { root.toggled(); }
+    }
+
+    TipMark { tip: root.tip; }
+}

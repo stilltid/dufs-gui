@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 本项目**只支持 Windows x64**：build.rs 嵌入 Windows manifest，
+# 代码里大量 Win32 调用（Job Object / IDropTarget / 注册表 / netsh），
+# 非 Windows 平台跑不起来。所以 CI 只在 windows runner 上跑。
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: 缓存
+        uses: Swatinem/rust-cache@v2
+
+      # ---- 硬门槛：必须能编译、测试必须过 ----
+      - name: cargo build
+        run: cargo build --locked
+
+      - name: cargo test
+        run: cargo test --locked
+
+      # ---- 软门槛：先不卡合并，让首次 CI 能绿；稳定后再加 -D warnings ----
+      - name: cargo clippy（非阻塞）
+        continue-on-error: true
+        run: cargo clippy --locked --all-targets
+
+      - name: cargo fmt --check（非阻塞）
+        continue-on-error: true
+        run: cargo fmt --all -- --check

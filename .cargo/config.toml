@@ -1,0 +1,22 @@
+# 构建配置
+#
+# ★ 为什么要把 C 运行库静态链接（crt-static）：
+#
+#   默认情况下，Rust 在 Windows(msvc) 上是**动态链接 CRT** 的，产物会导入
+#   `VCRUNTIME140.dll`。但这个 DLL **不是 Windows 自带的**，它来自
+#   “Microsoft Visual C++ 2015-2022 Redistributable”，只有装过 VC++ 程序的
+#   机器才有。
+#
+#   本项目交付的是一个「复制过去就能用」的单文件 exe，所以不能依赖它：
+#   加 +crt-static 之后，我们自己的 exe 导入表里就没有 VCRUNTIME140.dll 了。
+#
+#   注意：内嵌的 assets/dufs.exe 是 dufs 官方发布的预编译二进制，改不了它的
+#   链接方式，它仍然依赖 VCRUNTIME140.dll。这个依赖由 `dufs.rs` 把
+#   assets/vcruntime140.dll 释放到 dufs.exe 同目录（app-local 部署）来解决。
+#
+#   副作用：exe 大约增加 160 KB（13.2 MB -> 13.4 MB），换来零运行库依赖。
+#
+# 如果以后要改用动态链接（比如为了体积），记得同时删掉 assets/vcruntime140.dll
+# 和 dufs.rs 里的释放逻辑，否则行为会和预期不一致。
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

@@ -1,0 +1,73 @@
+name: Bug 报告
+description: 报告一个可复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量把下面的信息填全 —— 尤其是**日志**和**配置文件**，
+        它们能覆盖大部分「我这边复现不了」的情况。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 界面「应用 → 关于」里的本程序版本 / dufs 版本；或是从哪个 release 下载的。
+      placeholder: "例：v0.1.0（dufs 0.46.0）"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Windows 版本
+      placeholder: "例：Windows 11 23H2 x64"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象
+      description: 发生了什么？你**期望**发生什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开程序
+        2. 在「共享」页……
+        3. 点「启动服务」
+        4. 看到……
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: 运行日志（强烈建议附上）
+      description: |
+        路径：`%TEMP%\dufs-gui.log`（每次启动会清空，所以请在**复现之后、关程序之前**复制）。
+        自检报告在 `%TEMP%\dufs-gui-selftest*.txt`（跑过 `--selftest` / `--selftest-options` 才有）。
+        可直接拖进来或粘贴。
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: config
+    attributes:
+      label: 配置文件（涉及设置/权限问题时附上）
+      description: |
+        路径：`%APPDATA%\dufs-gui\config.json`。
+        ⚠ 里面可能含账号密码（明文）—— **请先改成 `***` 再粘贴**。
+      render: json
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索过现有 issue，确认不是重复
+          required: true
+        - label: 我粘贴的日志/配置里不含真实密码等敏感信息
+          required: true

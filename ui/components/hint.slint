@@ -1,0 +1,25 @@
+// 说明 / 提醒 / 错误 三种小字
+//
+// 以前这种小字在界面上出现了二十多次,每次都要手写 color + font-size + wrap。
+// 抽成组件后:1) 三种语义固定下来; 2) 改字号只改 theme.slint。
+
+import { Theme } from "../theme.slint";
+
+export enum HintKind {
+    /// 普通说明(灰)
+    info,
+    /// 提醒:能用但有副作用(黄)
+    warn,
+    /// 错误(红)
+    error,
+}
+
+export component Hint inherits Text {
+    in property <HintKind> kind: HintKind.info;
+
+    font-size: Theme.font-hint;
+    wrap: word-wrap;
+    color: kind == HintKind.error ? Theme.text-error
+         : kind == HintKind.warn  ? Theme.text-warn
+         : Theme.text-secondary;
+}
