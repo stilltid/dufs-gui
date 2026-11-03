@@ -7,7 +7,7 @@
 - [ ] `cargo test` 通过
 - [ ] 改到 `.slint` / 新增界面文案时：同时在 `translations/en/LC_MESSAGES/dufs-gui.po` 补了英文（`cargo test` 的 `slint的翻译不缺失也不多余` 会拦）
 - [ ] 改到 Rust 侧可见文案时：走的是 `i18n::t()`（不是硬编码中文）
-- [ ] 改到 dufs 选项拼装时：跑过 `cargo run -- --selftest-options`
+- [ ] 改到 dufs 选项拼装时：对照 `doc/dufs-参数清单.md` 核过一遍，并在本机双击跑一次界面确认生效
 - [ ] 界面大改动附了截图（浅色 / 深色各一张更好）
 
 ## 备注

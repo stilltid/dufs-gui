@@ -632,7 +632,7 @@ pub fn refresh_ips(app: &Arc<App>, ui: &Weak<MainWindow>, reason: &str) {
     // ★ 判据统一到 `net::missing_binds`（和"启动服务前再查一遍"用的是同一套）：
     //   原来这里拿 `candidates` 去比，而 candidates 为了挑"手机最可能连上的那个"
     //   特意剔掉了回环 / link-local 等等 —— 于是**合法绑了 127.0.0.1 的用户
-    //   会被当成"地址失效"清掉**。这种地址用户确实可以绑（自检里就在绑）。
+    //   会被当成"地址失效"清掉**。这种地址用户确实可以绑（比如 `127.0.0.1`）。
     let stale: Vec<String> = {
         let local = net::local_addresses();
         let mut cfg = app.cfg.lock().expect("cfg lock poisoned");

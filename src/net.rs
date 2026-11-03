@@ -28,7 +28,7 @@ impl Candidate {
 ///
 /// 用途：判断"配置里保存的监听地址在本机还在不在"。这里不能复用 `candidates`，
 /// 因为候选为了挑出"手机最可能连上的那个"特意剔掉了回环 / link-local 等等 ——
-/// 而用户**可以合法地绑那些地址**（自检里就在绑 `127.0.0.1`）。
+/// 而用户**可以合法地绑那些地址**（比如 `127.0.0.1`）。
 pub fn local_addresses() -> Vec<IpAddr> {
     match local_ip_address::list_afinet_netifas() {
         Ok(v) => v.into_iter().map(|(_, ip)| ip).collect(),
@@ -215,24 +215,6 @@ pub fn ipv6_available() -> bool {
 pub fn port_in_use(port: u16) -> bool {
     // 绑定 127.0.0.1 就够：如果别的进程已监听 0.0.0.0:port，这里同样会失败
     TcpListener::bind(("127.0.0.1", port)).is_err()
-}
-
-/// 让操作系统随便给一个当前可用的端口。
-///
-/// ★ 自检专用，不要在产品代码里用它占端口。
-///
-/// 为什么不用「固定的端口段」（比如 52100~52130）：
-/// 装过 Hyper-V / WSL 的机器上，Windows 会**动态**预留/释放端口段
-/// （虚拟交换机重建时会变），于是同一批端口昨天能绑、今天报
-/// `os error 10013`。实测就这样踩过一次：三个用例同时挂在
-/// 「dufs 启动后立即退出（10013）」，而几分钟后同样的端口又能绑了。
-///
-/// 做法：bind 到端口 0 让系统挑一个，读到端口号后立刻释放，
-/// 再把它交给 dufs。（关掉到 dufs 绑上之间有极小的竞争窗口，
-/// 万一撞上会在自检报告里以「启动后立即退出」的形式直接暴露出来。）
-pub fn free_port() -> u16 {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("找不到任何可用端口");
-    listener.local_addr().map(|a| a.port()).unwrap_or(0)
 }
 
 /// 端口是否落在 Windows 的"保留端口段"里。

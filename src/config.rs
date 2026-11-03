@@ -741,7 +741,7 @@ impl Default for Config {
 ///   ★ 只读是 `:ro`，或者直接省略；**没有 `:r`**。
 /// 校验结果里的**一个**问题。
 ///
-/// ★ 为什么是结构不是字符串：自检（`--selftest-options`）要断言"哪一行、哪一类问题"，
+/// ★ 为什么是结构不是字符串：单测要断言"哪一行、哪一类问题"，
 ///   而报错文案是要翻译的。把「**是什么问题**」和「**怎么说**」分开之后：
 ///   - 断言与语言无关：`p.index == 0 && p.kind == AccountProblemKind::NameHasSyntaxChar('@')`；
 ///   - 显示层调 `p.describe()` —— 从 Step 5 起它内部走 i18n，断言那边一个字都不用改。
@@ -1112,7 +1112,7 @@ pub fn serve_path_hint(path: &str) -> Option<String> {
 ///   2. 那一个不存在 / 既不是文件也不是文件夹 → 拒绝；
 ///   3. 否则采用（文件和文件夹都行，见 `serve_path_kind`）。
 ///
-/// 纯函数：`--selftest-options` 里直接拿合成路径测，不用真的去拖文件。
+/// 纯函数：单测直接拿合成路径测，不用真的去拖文件。
 pub fn decide_dropped_path(paths: Vec<PathBuf>) -> Result<PathBuf, String> {
     use crate::i18n::{self, K};
     if paths.is_empty() {
@@ -1349,7 +1349,7 @@ impl Config {
         }
         if self.use_auth {
             // ★ 只报第一条（提示栏放不下更多，行为与以前一致）；
-            //   完整列表在 `validate_accounts` 的返回值里，自检就是看那个。
+            //   完整列表在 `validate_accounts` 的返回值里。
             if let Some(p) = validate_accounts(&self.accounts).first() {
                 return Err(p.describe());
             }

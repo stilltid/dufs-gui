@@ -557,12 +557,9 @@ dufs --help
 
 # ③ 环境变量（官方 README 的 Environment variables 一节）
 #    https://github.com/sigoden/dufs/blob/main/README.md
-
-# ④ 本项目的自动化对照（真起 dufs、用 HTTP 验行为）
-dufs-gui.exe --selftest-options
-#    结果写 %TEMP%\dufs-gui-selftest-options.txt（295 项断言）
 ```
 
 **版本变了怎么办**：`src/args.rs` 是本清单的唯一权威来源，重新对一遍
-`Arg::new` 的个数和 `Args` 的字段即可；本项目的 `--selftest-options`
-会把「行为变了」这件事直接报出来。
+`Arg::new` 的个数和 `Args` 的字段即可。选项拼错了不会静默失效 ——
+dufs 启动会直接失败，界面会把它的 stderr 尾部显示出来；所以改完拼装后
+**双击跑一次界面**，勾上相应选项点「启动服务」就能当场验到。

@@ -446,7 +446,7 @@ fn option_name(token: &str) -> Option<String> {
 /// 必定是「额外命令行参数」造成的。
 /// 「额外命令行参数」里查出来的冲突。
 ///
-/// ★ 为什么是结构不是字符串：自检要断言「是不是重复选项」这一类事实，
+/// ★ 为什么是结构不是字符串：单测要断言「是不是重复选项」这一类事实，
 ///   而文案是要翻译的（见 `config::AccountProblem` 里同样的理由）。
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum OptionConflict {
@@ -478,7 +478,7 @@ impl std::fmt::Display for OptionConflict {
 /// `dufs::start` 的失败原因。
 ///
 /// 分这四类是因为它们的**解法完全不同**（改配置 / 删额外参数 / 装不上的环境问题 / 资源问题），
-/// 而且自检需要能在不读文案的前提下断言到具体哪一类。
+/// 而且单测需要能在不读文案的前提下断言到具体哪一类。
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum StartError {
     /// 配置本身不合格（`Config::validate` 的文案）
@@ -739,7 +739,7 @@ pub fn launch(cfg: &Config) -> Result<(Child, JobHandle), String> {
     vlog!("dufs 已释放: {}", exe.display());
 
     // 启动并托管到 Job Object
-    // ★ `start` 的错误是结构化的（自检要断言到具体哪一类），这里落回文案给上层显示
+    // ★ `start` 的错误是结构化的（单测要断言到具体哪一类），这里落回文案给上层显示
     let (mut child, job, log) = start(cfg, &exe).map_err(|e| e.describe())?;
     let pid = child.id();
     flog!("dufs 已启动 pid={pid}，等待端口就绪…");

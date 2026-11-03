@@ -28,8 +28,6 @@ mod folder_picker;
 mod job;
 mod net;
 mod qr;
-mod selftest;
-mod selftest_options;
 mod service;
 mod tray;
 mod ui;
@@ -89,23 +87,6 @@ fn main() {
         dufs::DUFS_VERSION,
         std::process::id()
     );
-
-    // ---------- 自检模式 ----------
-    // --selftest         : 跑完整生命周期（释放/启动/HTTP/停止）
-    // --selftest-orphan  : 启动 dufs 后强制 abort，用来验证 Job Object 不会留孤儿进程
-    // --selftest-options : 逐项验证每个 dufs 选项真的拼进了命令行、并且真的生效
-    //
-    // 图标相关的那两个开关（生成 .ico / 写进 exe）是**打包步骤**，不该由主程序带在身上，
-    // 已经搬到 src/bin/icon_tool.rs 了。
-    if std::env::args().any(|a| a == "--selftest") {
-        std::process::exit(selftest::run());
-    }
-    if std::env::args().any(|a| a == "--selftest-options") {
-        std::process::exit(selftest_options::run());
-    }
-    if std::env::args().any(|a| a == "--selftest-orphan") {
-        selftest::run_orphan();
-    }
 
     // ---------- 0. 提权分支：加防火墙规则 ----------
     // 普通权限下 netsh 改不了防火墙策略，所以由 ShellExecuteW("runas") 再启动一份自己，

@@ -4,10 +4,10 @@
 
 Windows 上的 [dufs](https://github.com/sigoden/dufs) 图形界面。
 dufs 是一个用 Rust写的轻量文件服务器；
-本项目把它的命令行选项做成界面，让不熟悉终端的用户也能把文件夹或
-单个文件共享给手机、或局域网内的其他设备。
+但是每次用命令行启动还是很麻烦的。
+本项目把它的命令行选项做成界面，让不熟悉终端的用户也能把文件夹或单个文件共享给手机、或局域网内的其他设备。
+只需要双击exe，然后启动，然后可以通过访问局域网网址或者扫描二维码快速访问由dufs构建的网站，进行文件的下载和上传。
 
-> 非官方项目，与 dufs 及其作者 sigoden 无隶属关系。本项目以内嵌方式分发 dufs 官方
 > 预编译的 `dufs.exe`，并以子进程调用它。
 
 ## 功能
@@ -20,16 +20,15 @@ dufs 是一个用 Rust写的轻量文件服务器；
   （`--completions`、`-h`、`-V`）
 - 端口、监听网卡、账号与逐目录权限、HTTPS、访问日志、静态站点模式均可配置
 - 运行期切换明暗主题（跟随系统 / 浅色 / 深色）
-- 自带自检命令，可脱离界面验证整条链路
 
 ## 截图
 
-| 运行中：手机扫码访问 | 深色主题 |
-|:--:|:--:|
+|                 运行中：手机扫码访问                 |                      深色主题                      |
+| :--------------------------------------------------: | :------------------------------------------------: |
 | <img src="docs/images/demo-running.png" width="320"> | <img src="docs/images/share-dark.png" width="320"> |
 
-| 进阶 | 应用（含「外观 / 主题」）|
-|:--:|:--:|
+|                        进阶                         |               应用（含「外观 / 主题」）                |
+| :-------------------------------------------------: | :----------------------------------------------------: |
 | <img src="docs/images/advanced-zh.png" width="320"> | <img src="docs/images/application-zh.png" width="320"> |
 
 ## 下载与运行
@@ -37,11 +36,13 @@ dufs 是一个用 Rust写的轻量文件服务器；
 从 [Releases](https://github.com/stilltid/dufs-gui/releases) 下载 `dufs-gui.exe`，
 双击运行。运行要求：Windows 10/11 x64。
 
-程序不联网、不收集数据，只写三个位置，删除即卸载：
+本程序只会改动这三个位置：
 
 - `%LOCALAPPDATA%\dufs-gui\bin\` —— 释放出的 `dufs.exe` 与运行库
 - `%APPDATA%\dufs-gui\config.json` —— 界面设置
 - `%TEMP%\dufs-gui.log` —— 运行日志，每次启动清空
+
+删除即卸载
 
 exe 未做代码签名，首次运行可能被 SmartScreen 拦截；因为内部嵌入了另一个 exe，
 部分杀毒软件也可能启发式误报。选择「仍要运行」即可。
@@ -64,18 +65,6 @@ cd dufs-gui
 cargo build --release
 cargo run --release --bin icon_tool -- embed target/release/dufs-gui.exe
 ```
-
-最后一步是必需的：`cargo build` 不会把图标写进 exe。
-
-## 自检
-
-```bash
-dufs-gui.exe --selftest            # 完整生命周期：释放 dufs、启动、HTTP 探活、停止
-dufs-gui.exe --selftest-options    # 逐项验证每个 dufs 选项都正确拼进命令行并生效
-dufs-gui.exe --selftest-orphan     # 强杀本进程，确认不留孤儿 dufs 进程
-```
-
-报告输出到 `%TEMP%\dufs-gui-selftest*.txt`。
 
 ## 文档
 

@@ -299,10 +299,7 @@ pub fn elevated_install(port: u16) -> i32 {
 ///
 /// 这里统一成一个入口，就是为了避免“某处加了、另一处忘了”——
 /// `list_rules()` 就是这么漏的（它在启动和刷新时都会跑，所以黑框特别显眼）。
-///
-/// 现在是 `pub(crate)`：自检（`selftest_options.rs`）里跑 cmd / certutil / curl /
-/// openssl 也要用，那几处以前就是漏了的（跑 `--selftest-options` 会闪黑框）。
-pub(crate) fn console_command(program: &str) -> Command {
+fn console_command(program: &str) -> Command {
     let mut cmd = Command::new(program);
     #[cfg(windows)]
     {

@@ -47,7 +47,6 @@ body:
       label: 运行日志（强烈建议附上）
       description: |
         路径：`%TEMP%\dufs-gui.log`（每次启动会清空，所以请在**复现之后、关程序之前**复制）。
-        自检报告在 `%TEMP%\dufs-gui-selftest*.txt`（跑过 `--selftest` / `--selftest-options` 才有）。
         可直接拖进来或粘贴。
       render: text
     validations:
