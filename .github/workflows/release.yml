@@ -1,0 +1,104 @@
+name: Release
+
+# 两种触发方式：
+#   1. 推 tag（v0.2.0）          → 默认正式版；tag 带 `-` 后缀（v0.3.0-rc.1）自动算预发布
+#   2. 手动 workflow_dispatch    → 版本号 + 「是否预发布」都由人填（临时想发预发布走这条）
+#
+# 为什么保留手动触发：tag 名字本身表达不了「这个版本我想标成 prerelease」，
+# 而 GitHub 的 /releases/latest 只认正式版 —— 标错会让「检查更新」走错分支。
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号，必须与 Cargo.toml 一致（例如 0.2.0）"
+        required: true
+      prerelease:
+        description: "标记为预发布（Pre-release）"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write # 创建 Release / 上传产物需要
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # generate_release_notes 需要完整历史
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存
+        uses: Swatinem/rust-cache@v2
+
+      # ---- 解析版本号：tag 还是手动输入？----
+      - name: 解析版本号
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            if ("${{ github.ref }}" -ne "refs/heads/main") { throw "请从 main 分支触发发布（当前 ${{ github.ref }}）" }
+            $v = "${{ inputs.version }}".Trim().TrimStart('v', 'V')
+            $pre = "${{ inputs.prerelease }}"
+          } else {
+            $v = "${{ github.ref_name }}".TrimStart('v', 'V')
+            # tag 带 `-` 后缀 → 预发布（v0.3.0-rc.1）
+            $pre = if ($v -match '-') { "true" } else { "false" }
+          }
+          if ($v -notmatch '^\d+\.\d+\.\d+') { throw "版本号不合法：$v" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "prerelease=$pre" >> $env:GITHUB_OUTPUT
+          Write-Host "version=$v prerelease=$pre"
+
+      # ---- 版本一致性：发错版本会让「检查更新」永远认为有新版本 ----
+      - name: 版本号必须与 Cargo.toml 一致
+        shell: pwsh
+        run: |
+          $toml = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          $want = "${{ steps.ver.outputs.version }}"
+          if ($toml -ne $want) { throw "版本不一致：tag/输入 = $want，Cargo.toml = $toml" }
+          Write-Host "Cargo.toml 版本：$toml"
+
+      - name: cargo test
+        run: cargo test --locked
+
+      - name: cargo build --release
+        run: cargo build --release --locked
+
+      # ★ cargo build 不会把图标写进 exe，少了这步发出去的图标是空的
+      - name: 嵌入图标
+        run: cargo run --release --locked --bin icon_tool -- embed target/release/dufs-gui.exe
+
+      # ---- 内嵌 dufs 的二进制和版本号必须对得上 ----
+      - name: 校验内嵌 dufs 版本
+        shell: pwsh
+        run: |
+          $real = (& .\assets\dufs.exe --version).Trim() -replace '^dufs\s+', ''
+          $want = (Select-String -Path src\dufs.rs -Pattern 'DUFS_VERSION: &str = "([^"]+)"').Matches[0].Groups[1].Value
+          if ($real -ne $want) { throw "内嵌 dufs $real 与 DUFS_VERSION($want) 不一致" }
+          Write-Host "内嵌 dufs：$real"
+
+      - name: 生成 SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash target\release\dufs-gui.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  dufs-gui.exe" | Out-File -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+
+      - name: 创建 Release 并上传产物
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: v${{ steps.ver.outputs.version }}
+          files: |
+            target/release/dufs-gui.exe
+            SHA256SUMS.txt
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ steps.ver.outputs.prerelease == 'true' }}
