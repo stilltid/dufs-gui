@@ -1,9 +1,9 @@
-# dufs 参数完整清单（v0.46.0）
+# dufs 参数完整清单（v0.47.0）
 
 > **这份清单是给人工审核用的。** 每个字段都不是猜的：从 dufs 源码、`--help`、实起实例
 > 三处对出来。
 >
-> - 对应版本：**dufs 0.46.0**（与本项目 `assets/dufs.exe` 一致；GitHub 上也是 Latest）
+> - 对应版本：**dufs 0.47.0**（与本项目 `assets/dufs.exe` 一致；GitHub 上也是 Latest）
 > - 复核方法见 §10，任何一条都能在几十秒内重跑一遍
 > - 「本程序界面」一列指的是 dufs-gui 目前把它放在哪一页
 
@@ -132,6 +132,8 @@
 #### `--path-prefix <path>`
 - 加了之后所有路由挂在 `/<前缀>/` 下。源码会把首尾的 `/` 去掉（`trim_matches('/')`），并按 URL 编码生成 `uri_prefix`。
 - ★ 会影响**对外地址**：本程序的二维码/复制地址必须带上它，否则扫码得到 `400 Invalid Path`。
+- ★ 0.47 起剥离前缀时要求**路径分隔符边界**：前缀 `myfiles` 下请求 `/myfilesX/` 返回 **400**
+  （0.46 是 404 —— 它会把 `/myfilesX/` 当成 `/myfiles` + `X/`）。本程序拼的是 `/myfiles/`，不受影响。
 
 #### `-c, --config <file>`
 - 见 §5。
@@ -196,8 +198,9 @@
   - 开了 → `['aaa.txt', 'sub/aaa-nested.txt']`（真的递归搜索，过滤掉了 `bbb.log`）
 - **`--allow-hash`**：控制 `?hash` 查询。不开时 `?hash` 返回 **403**。
 - **`--allow-archive`**：控制 `?zip` 打包下载。不开时返回 **404**。
-  - ★ 实测 0.46 **只有 `?zip`**：`?tar` 不被识别（返回 `content-type: text/html`，
+  - ★ 实测 0.47 **只有 `?zip`**：`?tar` 不被识别（返回 `content-type: text/html`，
     实际是普通目录列表页）。别按「zip/tar 都能打」去写代码。
+  - ★ 0.47 起 zip **保留空目录与 mtime**（0.46 会丢掉空目录，解压后目录结构变样）。
 - **`--allow-symlink`**：是否允许跟随**指向共享根之外**的符号链接。
 - **`--compress`**：只在 `--allow-archive`（或 `-A`）开着时才有意义。
 
@@ -211,10 +214,10 @@
 | （都不传） | 列目录 | 列目录 |
 | `--render-index` | 渲染 | **404** |
 | `--render-try-index` | 渲染 | 列目录 |
-| `--render-spa` | 渲染 | 单层未知路径回退到 index.html |
+| `--render-spa` | 渲染 | 任意深度的未知路径回退到 index.html |
 
-- ★ **`--render-spa` 只回退一层**：`/dashboard` → `index.html`；
-  `/a/b` → **404**（实测）。
+- ★ **`--render-spa` 对任意深度的未知路径都回退**（0.47 起）：`/dashboard`、
+  `/a/b`、`/a/b/c` 全部返回 `index.html`（0.46 时只有一层，`/a/b` 是 **404**）。
 
 #### `--assets <path>`
 - 覆盖 dufs 内置的网页版界面。
@@ -337,7 +340,7 @@ pub struct Args { ... }
 
 **格式要求**：
 - ★ **只认 `.json` / `.yaml` / `.yml`**。传 `.toml` 会报
-  `invalid type: string ..., expected struct Args` 然后退出（实测 dufs 0.46）。
+  `invalid type: string ..., expected struct Args` 然后退出（实测 dufs 0.47）。
 - `hidden` 支持字符串或数组；`auth` 支持字符串或数组。
 
 **示例（YAML）**：
@@ -498,7 +501,7 @@ dufs -a "admin:$H@/:rw"
 | `?q=` 不开 `--allow-search` 时完全无效 | 只返回普通目录列表，不报错也不过滤 |
 | `?hash` 不开 `--allow-hash` | **403** |
 | `?zip` 不开 `--allow-archive` | **404** |
-| `--render-spa` 只回退一层 | `/dashboard` → index.html；`/a/b` → **404** |
+| `--render-spa` 的回退深度 | 0.47 起任意深度都回退（`/dashboard`、`/a/b`、`/a/b/c` 都 → index.html）；0.46 只回退一层 |
 | `-c` 只认 `.json` / `.yaml` | `.toml` 报 `invalid type: string ...` 退出 |
 | `--assets` 目录必须含 `index.html` | 否则启动即失败 |
 | `--log-format ''` | 表示**关闭** http 访问日志（不是「用默认格式」） |

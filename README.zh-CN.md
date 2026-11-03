@@ -76,7 +76,7 @@ cargo run --release --bin icon_tool -- embed target/release/dufs-gui.exe
 
 第三方组件：
 
-- **dufs 0.46.0** —— MIT 或 Apache-2.0，© sigoden。许可正文见
+- **dufs 0.47.0** —— MIT 或 Apache-2.0，© sigoden。许可正文见
   [`assets/LICENSES/`](assets/LICENSES/)。
 - **Slint 1.18** —— 本项目使用其 GPL-3.0 分支。
 - **vcruntime140.dll** —— © Microsoft，按 Visual C++ 可再发行组件条款分发。

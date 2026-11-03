@@ -16,7 +16,7 @@
 
 ## 2. dufs（被封装的文件服务器，二进制被内嵌）
 
-- 版本：`0.46.0`（对应 `src/dufs.rs::DUFS_VERSION`）
+- 版本：`0.47.0`（对应 `src/dufs.rs::DUFS_VERSION`）
 - 许可：**MIT 或 Apache-2.0 双许可**（使用者可任选其一）
 - 版权：© sigoden
 - 来源：<https://github.com/sigoden/dufs>

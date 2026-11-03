@@ -106,8 +106,8 @@ msgstr "SPA (unknown paths return index.html)"
 msgid "单文件模式下没有目录可渲染，该选项不会传给 dufs。"
 msgstr "There is no directory to render in single-file mode, so this option is not passed to dufs."
 
-msgid "共享路径内存在前端构建产物时使用。\n注意：SPA 模式下仅一层未知路径（如 /dashboard）会回退到 index.html，更深的路径（如 /a/b）由 dufs 返回 404。"
-msgstr "Use this when the shared path contains a frontend build.\nNote: in SPA mode only one level of unknown path (such as /dashboard) falls back to index.html; deeper paths (such as /a/b) get a 404 from dufs."
+msgid "共享路径内存在前端构建产物时使用。\n注意：SPA 模式下任意深度的未知路径（如 /dashboard、/a/b）都会回退到 index.html。"
+msgstr "Use this when the shared path contains a frontend build.\nNote: in SPA mode any unknown path, at any depth (such as /dashboard or /a/b), falls back to index.html."
 
 msgid "HTTPS（可选）"
 msgstr "HTTPS (optional)"
@@ -166,8 +166,8 @@ msgstr "Config file"
 msgid "留空则不用（只支持 .json / .yaml）"
 msgstr "Leave empty to skip (only .json / .yaml are supported)"
 
-msgid "dufs 自身的配置文件（-c），可一次性写入全部选项。实测 dufs 0.46 仅支持 .json / .yaml（.toml 会报错）。\n其它页面中填写的选项会覆盖配置文件中的同名项。"
-msgstr "dufs's own config file (-c), which can set every option at once. Measured against dufs 0.46: only .json / .yaml are supported (.toml errors out).\nOptions filled in on the other pages override entries with the same name from this file."
+msgid "dufs 自身的配置文件（-c），可一次性写入全部选项。实测 dufs 0.47 仅支持 .json / .yaml（.toml 会报错）。\n其它页面中填写的选项会覆盖配置文件中的同名项。"
+msgstr "dufs's own config file (-c), which can set every option at once. Measured against dufs 0.47: only .json / .yaml are supported (.toml errors out).\nOptions filled in on the other pages override entries with the same name from this file."
 
 msgid "前端资源"
 msgstr "Frontend assets"

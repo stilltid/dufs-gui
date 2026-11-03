@@ -295,7 +295,7 @@ pub(crate) fn wire_callbacks(ui: &MainWindow, app: &Arc<App>) {
                 let picked = folder_picker::pick_file(
                     start_dir,
                     i18n::t(K::PickDufsConfigTitle),
-                    // 实测 0.46 只认 json / yaml；toml 会报 "invalid type: string"
+                    // 实测 0.47 只认 json / yaml；toml 会报 "invalid type: string"
                     (i18n::t(K::PickDufsConfigFilter), &["json", "yaml", "yml"][..]),
                 );
                 apply_picked_path(&weak, &app, "dufs_config", picked, |ui, v| {

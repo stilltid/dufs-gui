@@ -82,7 +82,7 @@ cargo run --release --bin icon_tool -- embed target/release/dufs-gui.exe
 
 Third-party components:
 
-- **dufs 0.46.0** — MIT or Apache-2.0, © sigoden. License texts in
+- **dufs 0.47.0** — MIT or Apache-2.0, © sigoden. License texts in
   [`assets/LICENSES/`](assets/LICENSES/).
 - **Slint 1.18** — used under its GPL-3.0 option.
 - **vcruntime140.dll** — © Microsoft, distributed under the Visual C++

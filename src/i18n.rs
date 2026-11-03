@@ -181,8 +181,8 @@ keys! {
         "dufs 配置文件不存在：{}" / "The dufs config file does not exist: {}",
     /// `{}` = 扩展名（不带点）
     VldDufsConfigExt =
-        "dufs 配置文件只支持 .json / .yaml / .yml（dufs 0.46 不支持 .{}）"
-        / "The dufs config file must be .json / .yaml / .yml (dufs 0.46 does not support .{})",
+        "dufs 配置文件只支持 .json / .yaml / .yml（dufs 0.47 不支持 .{}）"
+        / "The dufs config file must be .json / .yaml / .yml (dufs 0.47 does not support .{})",
     /// `{}` = 目录
     VldAssetsMissing =
         "自定义资源目录不存在：{}" / "The custom asset directory does not exist: {}",

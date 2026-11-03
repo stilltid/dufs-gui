@@ -116,7 +116,7 @@ export component AdvancedPage inherits VerticalLayout {
                 horizontal-stretch: 1;
             }
             TipMark {
-                tip: @tr("共享路径内存在前端构建产物时使用。\n注意：SPA 模式下仅一层未知路径（如 /dashboard）会回退到 index.html，更深的路径（如 /a/b）由 dufs 返回 404。");
+                tip: @tr("共享路径内存在前端构建产物时使用。\n注意：SPA 模式下任意深度的未知路径（如 /dashboard、/a/b）都会回退到 index.html。");
             }
         }
 
@@ -241,7 +241,7 @@ export component AdvancedPage inherits VerticalLayout {
         LabeledRow {
             label: @tr("配置文件");
             // 这行还兼着 dufs 配置文件的说明（步骤多、且 .toml 不支持，必须写清）
-            tip: @tr("dufs 自身的配置文件（-c），可一次性写入全部选项。实测 dufs 0.46 仅支持 .json / .yaml（.toml 会报错）。\n其它页面中填写的选项会覆盖配置文件中的同名项。");
+            tip: @tr("dufs 自身的配置文件（-c），可一次性写入全部选项。实测 dufs 0.47 仅支持 .json / .yaml（.toml 会报错）。\n其它页面中填写的选项会覆盖配置文件中的同名项。");
             label-width: Theme.label-w-extfile;
             LineEdit {
                 text <=> root.dufs-config;

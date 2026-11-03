@@ -36,7 +36,7 @@ const VCRUNTIME140_NAME: &str = "vcruntime140.dll";
 
 /// 与 assets/dufs.exe 对应的版本号。用于生成带版本的文件名，
 /// 这样升级时不会撞上"旧版本正被占用"的问题。
-pub const DUFS_VERSION: &str = "0.46.0";
+pub const DUFS_VERSION: &str = "0.47.0";
 
 /// 捕获到的 dufs 输出（环形缓冲，只保留最后若干行，用于报错）
 pub type LogSink = Arc<Mutex<VecDeque<String>>>;
@@ -384,7 +384,7 @@ const CLI_ONLY_OPTIONS: [&str; 4] = ["help", "version", "completions", "h"];
 /// 再用**半角逗号**重新拼起来。
 ///
 /// 为什么要做（两个都是**静默失效** —— 规则不生效，但界面上一点提示都没有，
-/// 实测 dufs 0.46）：
+/// 实测 dufs 0.47）：
 ///   1. **逗号后带空格**：clap 的 `value_delimiter(',')` 不会 trim，
 ///      `--hidden 'tmp, *.log'` 拆出来是 `tmp` 和 `" *.log"`（带前导空格），
 ///      于是 `*.log` 这条**永远匹配不上任何东西**。

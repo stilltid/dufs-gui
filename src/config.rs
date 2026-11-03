@@ -518,7 +518,7 @@ pub struct Config {
     pub log_disabled: bool,
     /// `--assets` 覆盖内置前端资源的目录。★ 必须含 index.html，否则 dufs 拒绝启动
     pub assets: String,
-    /// `-c, --config` dufs 配置文件。★ 实测 0.46 只认 JSON / YAML（TOML 会解析失败）；
+    /// `-c, --config` dufs 配置文件。★ 实测 0.47 只认 JSON / YAML（TOML 会解析失败）；
     /// 且命令行参数优先于配置文件里的同名项。
     pub dufs_config: String,
     /// 额外命令行参数原文，按空格切分后追加到最前面（位置参数之前）
@@ -736,7 +736,7 @@ impl Default for Config {
 /// ```
 /// （连反引号都没闭合），对普通用户完全没有指导意义。
 ///
-/// 语法（依据 dufs 官方 README，已在 0.46.0 实测）：
+/// 语法（依据 dufs 官方 README，已在 0.47.0 实测）：
 ///   `[用户名:密码@]路径[:rw|:ro][,路径...]`，多个账号用 `;` 分隔（本程序自己拆成多个 -a）。
 ///   ★ 只读是 `:ro`，或者直接省略；**没有 `:r`**。
 /// 校验结果里的**一个**问题。
@@ -1354,7 +1354,7 @@ impl Config {
                 return Err(p.describe());
             }
         }
-        // dufs 配置文件：先看存不存在，再看扩展名（0.46 实测不支持 TOML）
+        // dufs 配置文件：先看存不存在，再看扩展名（0.47 实测不支持 TOML）
         if !self.dufs_config.trim().is_empty() {
             let path = std::path::Path::new(self.dufs_config.trim());
             if !path.is_file() {
