@@ -65,6 +65,8 @@ export component ApplicationPage inherits VerticalLayout {
     callback verbose-log-changed(bool);
     callback open-log();
     callback open-config();
+    callback check-update();
+    callback open-releases();
     callback open-log-folder();
     callback clear-log();
     /// true = 恢复本程序出厂默认; false = 按 dufs 原生默认(纯只读)
@@ -382,6 +384,21 @@ export component ApplicationPage inherits VerticalLayout {
             }
             TipMark {
                 tip: @tr("配置为明文 JSON。界面显示异常时可打开核对（修改后需重启程序）。");
+            }
+        }
+
+        HorizontalLayout {
+            spacing: Theme.gap;
+            Button {
+                text: @tr("检查更新");
+                clicked => { root.check-update(); }
+            }
+            Button {
+                text: @tr("打开发布页");
+                clicked => { root.open-releases(); }
+            }
+            TipMark {
+                tip: @tr("只有点「检查更新」时才会访问 GitHub，启动时不会联网。");
             }
         }
     }

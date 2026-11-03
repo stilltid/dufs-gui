@@ -201,6 +201,8 @@ export component MainWindow inherits Window {
     callback open-log-folder();         // 打开本程序日志所在文件夹
     callback clear-log();               // 清空本程序日志
     callback open-config();             // 打开配置文件
+    callback check-update();            // 「关于 → 检查更新」（只查，不下载）
+    callback open-releases();           // 用浏览器打开 GitHub 发布页
     callback restore-defaults(bool);    // 恢复默认(true=本程序默认, false=dufs 原生纯只读)
     callback start-stop();
     callback add-firewall();
@@ -403,6 +405,8 @@ export component MainWindow inherits Window {
                     open-log-folder           => { root.open-log-folder(); }
                     clear-log                 => { root.clear-log(); }
                     open-config               => { root.open-config(); }
+                    check-update              => { root.check-update(); }
+                    open-releases             => { root.open-releases(); }
                     restore-defaults    (app) => { root.restore-defaults(app); }
                 }
 

@@ -8,7 +8,7 @@ use crate::i18n;
 use crate::i18n::K;
 use crate::service::App;
 use crate::MainWindow;
-use crate::{firewall, folder_picker, service, tray, ui};
+use crate::{firewall, folder_picker, service, tray, ui, update};
 #[cfg(windows)]
 use crate::drop_target;
 use slint::{CloseRequestResponse, ComponentHandle};
@@ -201,6 +201,49 @@ pub(crate) fn wire_callbacks(ui: &MainWindow, app: &Arc<App>) {
     {
         let weak = ui.as_weak();
         ui.on_open_config(move || service::open_config_file(&weak));
+    }
+
+    // ---------- 检查更新（只查，不下载）----------
+    // ★ 这是本程序**唯一**的出站请求，而且只在用户点按钮时发生：
+    //   启动路径上没有任何网络代码（见 update.rs 的注释）。
+    {
+        let weak = ui.as_weak();
+        ui.on_check_update(move || {
+            let weak2 = weak.clone();
+            ui::set_hint(&weak, i18n::t(K::UpdateChecking), false);
+            std::thread::spawn(move || match update::check() {
+                Ok(update::Outcome::UpToDate) => ui::set_hint(
+                    &weak2,
+                    i18n::tn(K::UpdateUpToDate, &[&update::current_version()]),
+                    false,
+                ),
+                Ok(update::Outcome::Newer {
+                    version,
+                    prerelease,
+                }) => {
+                    let key = if prerelease {
+                        K::UpdateAvailablePre
+                    } else {
+                        K::UpdateAvailable
+                    };
+                    ui::set_hint(
+                        &weak2,
+                        i18n::tn(key, &[&version, &update::current_version()]),
+                        false,
+                    )
+                }
+                Ok(update::Outcome::NoRelease) => {
+                    ui::set_hint(&weak2, i18n::t(K::UpdateNoRelease), false)
+                }
+                // 连不上 / 限流 / 内容看不懂：提示里已包含「打开发布页」的建议
+                Err(e) => ui::set_hint(&weak2, e.describe(), true),
+            });
+        });
+    }
+
+    // ---------- 打开发布页（检查更新的兑底，也是「有新版本」时的下载入口）----------
+    {
+        ui.on_open_releases(|| firewall::open_in_browser(&update::releases_url()));
     }
 
     // ---------- 恢复默认设置 ----------

@@ -424,6 +424,38 @@ keys! {
         "已恢复默认设置：{}。端口与监听网卡也已恢复默认。"
         / "Defaults restored: {}. The port and the listening interface were reset too.",
 
+    // ---------------- 检查更新（update.rs、callbacks.rs）----------------
+    UpdateChecking = "正在检查更新…" / "Checking for updates…",
+    /// `{}` = 当前版本
+    UpdateUpToDate =
+        "当前版本 {}，已是最新。" / "You are on {}, which is the latest version.",
+    /// `{}` = 新版本号，`{}` = 当前版本
+    UpdateAvailable =
+        "发现新版本 {}（当前 {}）。点「打开发布页」下载。"
+        / "Version {} is available (you have {}). Click \"Open releases page\" to download.",
+    /// `{}` = 预发布版本号，`{}` = 当前版本
+    UpdateAvailablePre =
+        "发现有预发布版本 {}（当前 {}）。若不想要预发布，可以忽略；要试用就点「打开发布页」。"
+        / "Pre-release {} is available (you have {}). Ignore it if you prefer stable builds; click \"Open releases page\" to try it.",
+    UpdateRepoNotFound =
+        "GitHub 上找不到这个仓库（404）。可能是仓库改名或网络被代理拦截。"
+        / "The repository was not found on GitHub (404). It may have been renamed, or a proxy is interfering.",
+    UpdateNoRelease =
+        "GitHub 上还没有发布版本。" / "There are no published releases on GitHub yet.",
+    /// `{}` = 原始错误
+    UpdateNoNet =
+        "无法连接 GitHub：{}。可以先检查网络或代理，再点「打开发布页」手动查看。"
+        / "Could not reach GitHub: {}. Check your network or proxy, then click \"Open releases page\" to look manually.",
+    UpdateRateLimited =
+        "GitHub 接口暂时限流（403/429），请稍后再试，或直接打开发布页。"
+        / "GitHub is rate limiting this IP (403/429). Try again later, or open the releases page.",
+    /// `{}` = 原始错误
+    UpdateBadResponse =
+        "GitHub 返回的内容无法解析：{}" / "Could not parse what GitHub returned: {}",
+    /// `{}` = 读到的 tag
+    UpdateBadVersion =
+        "GitHub 上的版本号无法解析：{}" / "Could not parse the version tag on GitHub: {}",
+
     // ---------------- 文件选择框 / 界面提示（callbacks.rs、config.rs）----------------
     PickTlsCertTitle = "选择 TLS 证书文件" / "Choose the TLS certificate file",
     PickTlsCertFilter = "证书" / "Certificate",

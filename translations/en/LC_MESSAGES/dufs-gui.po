@@ -310,6 +310,15 @@ msgstr "dufs folder"
 msgid "打开配置文件"
 msgstr "Open config file"
 
+msgid "检查更新"
+msgstr "Check for updates"
+
+msgid "打开发布页"
+msgstr "Open releases page"
+
+msgid "只有点「检查更新」时才会访问 GitHub，启动时不会联网。"
+msgstr "GitHub is contacted only when you click \"Check for updates\"; nothing is sent at startup."
+
 msgid "配置为明文 JSON。界面显示异常时可打开核对（修改后需重启程序）。"
 msgstr "The config is plain-text JSON. Open it to check things when the UI looks wrong (restart the program after editing)."
 

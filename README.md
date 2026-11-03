@@ -46,6 +46,10 @@ This program only touches these three locations:
 
 Delete them to uninstall.
 
+The program makes exactly one outbound request: the GitHub releases API, and only
+when you click **Check for updates** under Application → About. Nothing is sent
+at startup, and nothing is collected.
+
 The exe is not code-signed, so SmartScreen may warn on first launch. Some
 antivirus heuristics also flag it, because the binary embeds another exe.
 "Run anyway" is safe here.

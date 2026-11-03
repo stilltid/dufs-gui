@@ -31,6 +31,7 @@ mod qr;
 mod service;
 mod tray;
 mod ui;
+mod update;
 #[cfg(windows)]
 mod window_finder;
 #[cfg(windows)]

@@ -40,6 +40,7 @@ tray-icon = "0.25.1"                                          # 系统托盘（�
 # ---- 配置持久化 ----
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+ureq = { version = "3.5.1", default-features = false, features = ["native-tls-no-default"] }
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6"
