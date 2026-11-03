@@ -269,6 +269,20 @@ mod tests {
         }
     }
 
+    /// 把路径规范化成「绝对 + 长名」形式再比较。
+    ///
+    /// ★ 为什么不能直接比字符串：GitHub Actions 的 Windows runner 上 `%TEMP%`
+    ///   是 **8.3 短名**（`C:\Users\RUNNER~1\AppData\Local\Temp`），而 Shell 的
+    ///   `CF_HDROP` 交回来的是**长名**（`C:\Users\runneradmin\...`）。同一个文件、
+    ///   两种拼写，直接 `assert_eq!` 必挂 —— 而且 CI 上是**必现**的，不是偶发。
+    ///   本地 `%TEMP%` 本来就是长名，所以本地永远复现不出来（曾经就是这么红的）。
+    ///
+    /// 两边都过一遍 `canonicalize`：Windows 上它会带上 `\\?\` 前缀，只要
+    /// 两边都规范化，前缀也一样，比较才有意义。文件由调用方保证存在。
+    fn canonical(p: &std::path::Path) -> std::path::PathBuf {
+        std::fs::canonicalize(p).unwrap_or_else(|e| panic!("规范化路径失败 {}: {e}", p.display()))
+    }
+
     #[test]
     fn shell_hdrop_roundtrip() {
         let file = std::env::temp_dir().join("dufs-gui-drop-probe.txt");
@@ -277,7 +291,11 @@ mod tests {
         let data = shell_data_object(&file);
         assert!(has_files(&data), "CF_HDROP 应当被识别为文件拖放");
         let paths = hdrop_paths(&data).expect("应当读出路径列表");
-        assert_eq!(paths, vec![file.clone()], "读出的路径应当和拖进去的一致");
+        assert_eq!(
+            paths.iter().map(|p| canonical(p)).collect::<Vec<_>>(),
+            vec![canonical(&file)],
+            "读出的路径应当和拖进去的一致（按规范化后的路径比较，见 canonical 的注释）"
+        );
 
         let _ = std::fs::remove_file(&file);
     }
@@ -290,9 +308,14 @@ mod tests {
         let file = std::env::temp_dir().join("dufs-gui-drop-probe2.txt");
         std::fs::write(&file, b"probe").unwrap();
         let data = shell_data_object(&file);
+        let want = vec![canonical(&file)];
         for _ in 0..50 {
             let paths = hdrop_paths(&data).expect("反复读应当都成功");
-            assert_eq!(paths, vec![file.clone()]);
+            assert_eq!(
+                paths.iter().map(|p| canonical(p)).collect::<Vec<_>>(),
+                want,
+                "反复读出的路径同样要按规范化后的形式比较"
+            );
         }
         let _ = std::fs::remove_file(&file);
     }
