@@ -1,20 +1,24 @@
 name: Release
 
-# 两种触发方式：
-#   1. 推 tag（v0.2.0）          → 默认正式版；tag 带 `-` 后缀（v0.3.0-rc.1）自动算预发布
-#   2. 手动 workflow_dispatch    → 版本号 + 「是否预发布」都由人填（临时想发预发布走这条）
+# 只支持手动触发（Actions 页面 → Run workflow）。
 #
-# 为什么保留手动触发：tag 名字本身表达不了「这个版本我想标成 prerelease」，
-# 而 GitHub 的 /releases/latest 只认正式版 —— 标错会让「检查更新」走错分支。
+# 为什么去掉了推 tag 自动发版：这个项目只需要借 GitHub 的 runner 编译 +
+# 传产物，版本号和发布说明都在弹窗里现填，不依赖 tag，也不怕误推 tag 发错版。
+#
+# ★ 发布说明在 workflow_dispatch 的弹窗里填。GitHub 至今（2026-09）不给
+#   workflow_dispatch 提供多行输入框（只有单行 string），所以**换行要写成字面
+#   的 \n**，工作流里会把它还原成真换行。正文支持 Markdown。
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
         description: "版本号，必须与 Cargo.toml 一致（例如 0.2.0）"
         required: true
+      release_notes:
+        description: '发布说明（支持 Markdown；需要换行时写 \n）'
+        required: true
+        type: string
       prerelease:
         description: "标记为预发布（Pre-release）"
         type: boolean
@@ -28,8 +32,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # generate_release_notes 需要完整历史
 
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@stable
@@ -37,24 +39,31 @@ jobs:
       - name: 缓存
         uses: Swatinem/rust-cache@v2
 
-      # ---- 解析版本号：tag 还是手动输入？----
+      # ---- 解析版本号（手动输入）----
       - name: 解析版本号
         id: ver
         shell: pwsh
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            if ("${{ github.ref }}" -ne "refs/heads/main") { throw "请从 main 分支触发发布（当前 ${{ github.ref }}）" }
-            $v = "${{ inputs.version }}".Trim().TrimStart('v', 'V')
-            $pre = "${{ inputs.prerelease }}"
-          } else {
-            $v = "${{ github.ref_name }}".TrimStart('v', 'V')
-            # tag 带 `-` 后缀 → 预发布（v0.3.0-rc.1）
-            $pre = if ($v -match '-') { "true" } else { "false" }
-          }
+          if ("${{ github.ref }}" -ne "refs/heads/main") { throw "请从 main 分支触发发布（当前 ${{ github.ref }}）" }
+          $v = "${{ inputs.version }}".Trim().TrimStart('v', 'V')
+          $pre = "${{ inputs.prerelease }}"
           if ($v -notmatch '^\d+\.\d+\.\d+') { throw "版本号不合法：$v" }
           "version=$v" >> $env:GITHUB_OUTPUT
           "prerelease=$pre" >> $env:GITHUB_OUTPUT
           Write-Host "version=$v prerelease=$pre"
+
+      # ---- 发布说明：单行输入里用字面 \n 表示换行 ----
+      - name: 生成发布说明
+        shell: pwsh
+        env:
+          RAW_NOTES: ${{ inputs.release_notes }}
+        run: |
+          $notes = ($env:RAW_NOTES -replace '\\n', "`n").Trim()
+          if ([string]::IsNullOrWhiteSpace($notes)) { throw "发布说明不能为空" }
+          # 手动写文件：GitHub 的 GITHUB_OUTPUT 多行语法在 Windows 上会被 CRLF 干扰
+          [System.IO.File]::WriteAllText("$env:GITHUB_WORKSPACE\release-notes.md", $notes, [System.Text.UTF8Encoding]::new($false))
+          Write-Host "发布说明："
+          Get-Content release-notes.md
 
       # ---- 版本一致性：发错版本会让「检查更新」永远认为有新版本 ----
       - name: 版本号必须与 Cargo.toml 一致
@@ -99,6 +108,6 @@ jobs:
           files: |
             target/release/dufs-gui.exe
             SHA256SUMS.txt
+          body_path: release-notes.md
           fail_on_unmatched_files: true
-          generate_release_notes: true
-          prerelease: ${{ steps.ver.outputs.prerelease == 'true' }}
+          prerelease: ${{ inputs.prerelease }}
