@@ -17,10 +17,13 @@
 #[cfg(windows)]
 mod imp {
     use windows::core::{HSTRING, PCWSTR};
-    use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, WIN32_ERROR};
+    use windows::Win32::Foundation::{
+        ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, WIN32_ERROR,
+    };
     use windows::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SZ, RegCloseKey,
-        RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
+        HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_OPTION_NON_VOLATILE, REG_SZ,
+        RegCloseKey, RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW,
+        RegSetValueExW,
     };
 
     /// windows 0.62 的注册表 API 返回 `WIN32_ERROR`（就是个 u32 包装），不是 Result。
@@ -50,6 +53,42 @@ mod imp {
                 &mut hkey,
             );
             (r == ERROR_SUCCESS).then_some(hkey)
+        }
+    }
+
+    /// 打开 Run 键；不存在就创建（`RegCreateKeyExW` 对已存在的键等价于打开）。
+    ///
+    /// ★ 早期版本只调 `RegOpenKeyExW`，理由是「Run 键一般已存在」。但 GitHub 的
+    ///   Windows runner（以及真实机器上的全新用户配置）里这个键并不存在，
+    ///   `roundtrip_registry` 因此直接失败。HKCU 下建键不需要管理员权限。
+    fn open_or_create_run_key(
+        access: windows::Win32::System::Registry::REG_SAM_FLAGS,
+    ) -> Result<HKEY, String> {
+        unsafe {
+            let mut hkey = HKEY::default();
+            let r = RegCreateKeyExW(
+                HKEY_CURRENT_USER,
+                &HSTRING::from(RUN_KEY),
+                None,
+                PCWSTR::null(),
+                REG_OPTION_NON_VOLATILE,
+                access,
+                None,
+                &mut hkey,
+                None,
+            );
+            if r == ERROR_ACCESS_DENIED {
+                // 策略/ACL 明确不让写：给用户看得懂的提示，而不是一个裸错误码。
+                return Err(crate::i18n::t(crate::i18n::K::AutoRunKeyLocked).to_string());
+            }
+            if r != ERROR_SUCCESS {
+                // 其余错误带上 Win32 错误码（旧代码吞掉了它，CI 上无法判断原因）。
+                return Err(crate::i18n::tn(
+                    crate::i18n::K::RegOpFailed,
+                    &[&crate::i18n::t(crate::i18n::K::RegOpWrite), &r.0],
+                ));
+            }
+            Ok(hkey)
         }
     }
 
@@ -164,11 +203,9 @@ mod imp {
             ));
         }
 
-        // 开：需要可写权限；Run 键一般已存在，保险起见先试着打开，
-        // 打不开再创建（RegCreateKeyExW 需要多一个 feature，这里不引入）
+        // 开：需要可写权限；Run 键不存在就创建（见 `open_or_create_run_key`）。
         let value = desired_value(tray)?;
-        let hkey = open_run_key(KEY_SET_VALUE)
-            .ok_or_else(|| crate::i18n::t(crate::i18n::K::AutoRunKeyLocked).to_string())?;
+        let hkey = open_or_create_run_key(KEY_SET_VALUE)?;
 
         // REG_SZ 要带结尾 NUL，按字节写入
         let mut bytes: Vec<u8> = Vec::new();
