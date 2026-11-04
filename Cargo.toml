@@ -1,6 +1,6 @@
 [package]
 name = "dufs-gui"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 build = "build.rs"
 description = "dufs 图形界面封装：一键在局域网内共享文件夹"
