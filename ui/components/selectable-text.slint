@@ -1,0 +1,27 @@
+// 只读、但可以用鼠标划选 + Ctrl+C 复制的文本。
+//
+// ★ 为什么不是 Text：Slint 的 Text 不支持划选，而「关于」里那些路径
+//   （AppData 下的配置文件、dufs 目录）又长又没法手抄。
+//   TextInput 的 `read-only` 只禁编辑、**不禁选择**（Slint 文档原话：
+//   "text editing via keyboard and mouse is disabled but selecting text is
+//   still enabled"），是内置元素里唯一原生支持拖选的。
+//   本软件日志路径那一行（application.slint 的 LineEdit read-only）早就这么做。
+//
+// ★ 不加边框/背景：TextInput 默认就是裸文本，外观和原来的 Text 一致，
+//   不会在「关于」表里突然多出一个输入框的壳。
+import { Theme } from "../theme.slint";
+
+export component SelectableText inherits TextInput {
+    /// 允许换行（长路径用）。false = 单行，适合版本号这类短文本。
+    in property <bool> multiline: false;
+
+    read-only: true;
+    single-line: !root.multiline;
+    wrap: root.multiline ? word-wrap : no-wrap;
+    color: Theme.text-primary;
+    font-size: Theme.font-hint;
+    vertical-alignment: top;
+    // 选中色用主题绿，深色/浅色界面下都和正文有足够对比度。
+    selection-background-color: Theme.accent;
+    selection-foreground-color: Theme.on-accent;
+}

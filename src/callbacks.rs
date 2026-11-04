@@ -202,6 +202,10 @@ pub(crate) fn wire_callbacks(ui: &MainWindow, app: &Arc<App>) {
         let weak = ui.as_weak();
         ui.on_open_config(move || service::open_config_file(&weak));
     }
+    {
+        let weak = ui.as_weak();
+        ui.on_open_bin_dir(move || service::open_bin_dir(&weak));
+    }
 
     // ---------- 检查更新（只查，不下载）----------
     // ★ 这是本程序**唯一**的出站请求，而且只在用户点按钮时发生：

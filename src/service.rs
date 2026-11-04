@@ -1454,6 +1454,16 @@ pub fn clear_app_log(ui: &Weak<MainWindow>) {
     ui::set_hint(ui, i18n::t(K::LogAppCleared), false);
 }
 
+/// 在资源管理器里打开 dufs 释放目录（`%LOCALAPPDATA%\dufs-gui\bin`）。
+///
+/// ★ 和「打开配置文件」不是一回事：那里放的是 JSON 设置，
+///   这里放的是内嵌释放出来的 dufs.exe 和 vcruntime140.dll。
+pub fn open_bin_dir(ui: &Weak<MainWindow>) {
+    let dir = dufs::bin_dir();
+    crate::firewall::open_path(&dir.to_string_lossy());
+    ui::set_hint(ui, i18n::tn(K::FileOpenedInExplorer, &[&dir.display()]), false);
+}
+
 /// 打开配置文件（JSON，明文）。
 pub fn open_config_file(ui: &Weak<MainWindow>) {
     let path = crate::config::config_path();

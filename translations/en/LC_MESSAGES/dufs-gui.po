@@ -310,6 +310,9 @@ msgstr "dufs folder"
 msgid "打开配置文件"
 msgstr "Open config file"
 
+msgid "打开 dufs 目录"
+msgstr "Open dufs folder"
+
 msgid "检查更新"
 msgstr "Check for updates"
 
