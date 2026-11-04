@@ -22,7 +22,7 @@ on:
       prerelease:
         description: "标记为预发布（Pre-release）"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: write # 创建 Release / 上传产物需要
